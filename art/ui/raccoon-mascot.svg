@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-label="Raccoon recorder student mascot">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <linearGradient id="fur" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#c9b6ff"/><stop offset="1" stop-color="#7462b8"/></linearGradient>
+    <linearGradient id="robe" x1="0" x2="1"><stop stop-color="#8cf8ff"/><stop offset="1" stop-color="#c89cff"/></linearGradient>
+  </defs>
+  <circle cx="110" cy="112" r="94" fill="#21133f" opacity=".78"/>
+  <circle cx="168" cy="42" r="18" fill="#fff0a7" filter="url(#glow)"/>
+  <path d="M56 85 30 46c-4-6 1-14 8-12l48 13Zm108 0 26-39c4-6-1-14-8-12l-48 13Z" fill="#7e6ec2" stroke="#efe2ff" stroke-width="5" stroke-linejoin="round"/>
+  <circle cx="110" cy="96" r="62" fill="url(#fur)" stroke="#efe2ff" stroke-width="5"/>
+  <path d="M48 92c20-30 47-40 62-40s42 10 62 40c-18 18-38 26-62 26S66 110 48 92Z" fill="#3d2d63"/>
+  <ellipse cx="84" cy="91" rx="18" ry="22" fill="#fff8ff"/><ellipse cx="136" cy="91" rx="18" ry="22" fill="#fff8ff"/>
+  <circle cx="89" cy="94" r="7" fill="#140d2d"/><circle cx="131" cy="94" r="7" fill="#140d2d"/>
+  <path d="M103 105c4 5 10 5 14 0" fill="none" stroke="#140d2d" stroke-width="5" stroke-linecap="round"/>
+  <path d="M91 128c12 10 26 10 38 0" fill="none" stroke="#fff0a7" stroke-width="6" stroke-linecap="round"/>
+  <path d="M65 151c10-27 80-27 90 0l12 43H53Z" fill="url(#robe)" stroke="#efe2ff" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="64" y="138" width="91" height="17" rx="8.5" transform="rotate(-15 109 146)" fill="#ffd76a" stroke="#6b3d20" stroke-width="4"/>
+  <circle cx="87" cy="152" r="3" fill="#6b3d20"/><circle cx="111" cy="146" r="3" fill="#6b3d20"/><circle cx="134" cy="140" r="3" fill="#6b3d20"/>
+  <path d="M52 166c-20 18-12 39 12 32 12-3 22-14 27-28" fill="none" stroke="#7e6ec2" stroke-width="16" stroke-linecap="round"/>
+</svg>

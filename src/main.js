@@ -185,28 +185,78 @@ function render() {
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = done ? '#c8bde8' : '#160d2f';
-    ctx.fillText(`${note.note} · ${note.mode}`, x + 14, y + rowHeight * 0.3);
-
-    ctx.fillStyle = hit ? '#fff8b4' : 'rgba(255,248,255,.78)';
-    ctx.beginPath();
-    ctx.arc(x + Math.min(w - 18, 22), y + rowHeight * 0.3, 6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.font = '700 15px Inter, system-ui, sans-serif';
+    ctx.fillText(`${note.note} · ${modeLabel(note.mode)}`, x + 44, y + rowHeight * 0.3);
+    drawNoteNode(x + 23, y + rowHeight * 0.3, hit, done);
+    if (hit) drawSparkle(x + Math.min(w - 18, w * 0.82), y + rowHeight * 0.3, 10);
   }
 
-  ctx.shadowColor = 'rgba(116,247,255,.85)';
+  drawPlayhead(playheadX, height);
+}
+
+function modeLabel(mode) {
+  return mode === 'confirm' ? 'tap' : mode;
+}
+
+function drawNoteNode(x, y, hit, done) {
+  const radius = hit ? 11 : 9;
+  const gradient = ctx.createRadialGradient(x - 3, y - 4, 2, x, y, radius);
+  gradient.addColorStop(0, '#fff8ff');
+  gradient.addColorStop(0.48, hit ? '#85ffd0' : '#fff0a7');
+  gradient.addColorStop(1, done ? '#66568e' : '#bd8cff');
+  ctx.shadowColor = hit ? 'rgba(116,247,255,.9)' : 'rgba(255,215,106,.45)';
+  ctx.shadowBlur = hit ? 14 : 8;
+  ctx.fillStyle = gradient;
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,248,255,.82)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawPlayhead(x, height) {
+  ctx.shadowColor = 'rgba(116,247,255,.9)';
   ctx.shadowBlur = 18;
   ctx.strokeStyle = '#a7f8ff';
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(playheadX, 0);
-  ctx.lineTo(playheadX, height);
+  ctx.moveTo(x, 18);
+  ctx.lineTo(x, height - 12);
   ctx.stroke();
   ctx.shadowBlur = 0;
 
   ctx.fillStyle = '#fff0a7';
+  ctx.strokeStyle = '#fff8ff';
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(playheadX, 24, 8, 0, Math.PI * 2);
+  ctx.arc(x - 2, 24, 13, Math.PI * 0.42, Math.PI * 1.62, false);
+  ctx.arc(x + 5, 24, 10, Math.PI * 1.68, Math.PI * 0.35, true);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
+  drawSparkle(x + 18, 44, 8);
+}
+
+function drawSparkle(x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#fff0a7';
+  ctx.shadowColor = 'rgba(255,240,167,.8)';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.28, -size * 0.28);
+  ctx.lineTo(size, 0);
+  ctx.lineTo(size * 0.28, size * 0.28);
+  ctx.lineTo(0, size);
+  ctx.lineTo(-size * 0.28, size * 0.28);
+  ctx.lineTo(-size, 0);
+  ctx.lineTo(-size * 0.28, -size * 0.28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawStars(width, height) {

@@ -9,10 +9,13 @@
 <body>
   <main class="app">
     <section class="hero">
-      <p class="eyebrow">moonlit music school</p>
-      <h1>flute-hero</h1>
-      <p class="lede">Follow the glowing music trail, play the recorder note, and wake the little classroom stars.</p>
-      <button id="startButton" type="button">Enable microphone</button>
+      <div class="hero-copy">
+        <p class="eyebrow">moonlit music school</p>
+        <h1>flute-hero</h1>
+        <p class="lede">Follow the glowing music trail, play the recorder note, and wake the little classroom stars.</p>
+        <button id="startButton" type="button"><img src="./art/ui/recorder-icon.svg" alt="" /> Enable microphone</button>
+      </div>
+      <img class="mascot" src="./art/ui/raccoon-mascot.svg" alt="A cute raccoon recorder student" />
     </section>
 
     <section class="panel meters" aria-live="polite">
@@ -31,6 +34,7 @@
     </section>
 
     <section class="panel lane-wrap">
+      <div class="lane-label"><img src="./art/ui/star-badge.svg" alt="" /> Magic note path</div>
       <canvas id="noteLane" width="960" height="320" aria-label="Scrolling note lane"></canvas>
     </section>
 

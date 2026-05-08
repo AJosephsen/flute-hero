@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 160" role="img" aria-label="Moon wand playhead marker">
+  <defs><filter id="glow" x="-80%" y="-40%" width="260%" height="180%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <path d="M48 58v92" stroke="#a7f8ff" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M58 12c-18 5-29 21-25 39s21 29 39 25c-10 13-29 18-45 9S4 55 9 38 33 8 58 12Z" fill="#fff0a7" stroke="#fff8ff" stroke-width="5" filter="url(#glow)"/>
+  <path d="M25 97h46M32 121h32" stroke="#c89cff" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+</svg>

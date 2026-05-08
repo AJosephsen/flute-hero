@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 80" role="img" aria-label="Recorder flute icon">
+  <defs><linearGradient id="r" x1="0" x2="1"><stop stop-color="#fff3bf"/><stop offset="1" stop-color="#ffd76a"/></linearGradient></defs>
+  <rect x="18" y="25" width="178" height="30" rx="15" fill="url(#r)" stroke="#6b3d20" stroke-width="6"/>
+  <path d="M183 24h22c7 0 12 6 10 13l-5 18h-27Z" fill="#ffe7a0" stroke="#6b3d20" stroke-width="6" stroke-linejoin="round"/>
+  <circle cx="69" cy="40" r="5" fill="#6b3d20"/><circle cx="96" cy="40" r="5" fill="#6b3d20"/><circle cx="123" cy="40" r="5" fill="#6b3d20"/><circle cx="150" cy="40" r="5" fill="#6b3d20"/>
+  <path d="M33 25v30" stroke="#6b3d20" stroke-width="5"/>
+</svg>

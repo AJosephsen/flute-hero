@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-label="Magic star success badge">
+  <defs><filter id="g" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="s" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff7b0"/><stop offset=".55" stop-color="#ffd76a"/><stop offset="1" stop-color="#ff93c8"/></linearGradient></defs>
+  <circle cx="80" cy="80" r="63" fill="#21133f" stroke="#c89cff" stroke-width="7" opacity=".92"/>
+  <path d="m80 25 15 35 38 4-29 25 9 37-33-20-33 20 9-37-29-25 38-4Z" fill="url(#s)" stroke="#fff8ff" stroke-width="6" stroke-linejoin="round" filter="url(#g)"/>
+  <circle cx="58" cy="74" r="5" fill="#140d2d"/><circle cx="102" cy="74" r="5" fill="#140d2d"/>
+  <path d="M66 91c9 9 19 9 28 0" fill="none" stroke="#140d2d" stroke-width="6" stroke-linecap="round"/>
+</svg>
