@@ -34,6 +34,16 @@
       <canvas id="noteLane" width="960" height="320" aria-label="Scrolling note lane"></canvas>
     </section>
 
+    <section class="panel debug" aria-label="Debug timing and pitch telemetry">
+      <h2>Debug</h2>
+      <dl>
+        <div><dt>Frame</dt><dd id="debugFrameTime">—</dd></div>
+        <div><dt>Audio latency</dt><dd id="debugAudioLatency">—</dd></div>
+        <div><dt>Frequency</dt><dd id="debugFrequency">—</dd></div>
+        <div><dt>Confidence</dt><dd id="debugConfidence">—</dd></div>
+      </dl>
+    </section>
+
     <section class="panel hint">
       <h2>Prototype exercise</h2>
       <p>Play long beginner notes near the fixed playhead. Green means close enough; amber means keep searching.</p>

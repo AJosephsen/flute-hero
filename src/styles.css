@@ -23,7 +23,13 @@ h1 { font-size: clamp(48px, 9vw, 112px); line-height: .85; margin: 0; letter-spa
 strong { font-size: 28px; }
 .lane-wrap { overflow: hidden; }
 canvas { display: block; width: 100%; height: auto; }
+.debug { margin-top: 18px; padding: 18px; }
+.debug h2 { margin: 0 0 14px; font-size: 16px; color: #fff; }
+.debug dl { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin: 0; overflow: hidden; border-radius: 16px; }
+.debug div { padding: 14px; background: rgba(255,255,255,.04); }
+.debug dt { color: #8792bd; font-size: 11px; text-transform: uppercase; letter-spacing: .12em; margin-bottom: 6px; }
+.debug dd { margin: 0; font-variant-numeric: tabular-nums; font-size: 20px; color: #dbe4ff; }
 .hint { margin-top: 18px; padding: 18px; color: #c8d3ff; }
 .hint h2 { color: #fff; margin: 0 0 8px; }
 .hint p { margin: 0; }
-@media (max-width: 720px) { .meters { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .meters, .debug dl { grid-template-columns: 1fr; } }

@@ -7,6 +7,10 @@ const targetNote = document.querySelector('#targetNote');
 const accuracy = document.querySelector('#accuracy');
 const canvas = document.querySelector('#noteLane');
 const ctx = canvas.getContext('2d');
+const debugFrameTime = document.querySelector('#debugFrameTime');
+const debugAudioLatency = document.querySelector('#debugAudioLatency');
+const debugFrequency = document.querySelector('#debugFrequency');
+const debugConfidence = document.querySelector('#debugConfidence');
 
 const state = {
   audio: null,
@@ -48,6 +52,7 @@ function frame(now) {
   updatePitch();
   updateGame(dt);
   render();
+  updateDebug(dt);
   requestAnimationFrame(frame);
 }
 
@@ -84,6 +89,22 @@ function updateGame(dt) {
 
   state.songTime += dt;
   accuracy.textContent = current ? (hit ? 'hit' : 'search') : 'done';
+}
+
+function updateDebug(dt) {
+  debugFrameTime.textContent = `${(dt * 1000).toFixed(1)} ms`;
+
+  if (!state.audio) {
+    debugAudioLatency.textContent = 'mic off';
+    debugFrequency.textContent = '—';
+    debugConfidence.textContent = '—';
+    return;
+  }
+
+  const latencyMs = ((state.audio.baseLatency ?? 0) + (state.audio.outputLatency ?? 0)) * 1000;
+  debugAudioLatency.textContent = latencyMs > 0 ? `${latencyMs.toFixed(1)} ms` : 'unknown';
+  debugFrequency.textContent = state.pitch ? `${state.pitch.frequency.toFixed(1)} Hz` : '—';
+  debugConfidence.textContent = state.pitch ? `${Math.round(state.pitch.confidence * 100)}%` : '—';
 }
 
 function currentNote() {

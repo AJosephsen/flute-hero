@@ -72,6 +72,12 @@ try {
     detected: document.querySelector('#detectedNote')?.textContent,
     target: document.querySelector('#targetNote')?.textContent,
     accuracy: document.querySelector('#accuracy')?.textContent,
+    debug: {
+      frameTime: document.querySelector('#debugFrameTime')?.textContent,
+      audioLatency: document.querySelector('#debugAudioLatency')?.textContent,
+      frequency: document.querySelector('#debugFrequency')?.textContent,
+      confidence: document.querySelector('#debugConfidence')?.textContent,
+    },
     canvas: {
       width: document.querySelector('#noteLane')?.width,
       height: document.querySelector('#noteLane')?.height,
@@ -79,6 +85,10 @@ try {
     audioState: window.__fluteHeroSyntheticMic?.audio?.state,
     hadNativeGetUserMedia: window.__fluteHeroOriginalGetUserMedia,
   }));
+
+  if (!result.debug.frequency?.includes('Hz') || !result.debug.frameTime?.includes('ms')) {
+    throw new Error(`Debug overlay did not populate: ${JSON.stringify(result.debug)}`);
+  }
 
   if (consoleErrors.length || pageErrors.length) {
     throw new Error(`Browser errors: ${JSON.stringify({ consoleErrors, pageErrors }, null, 2)}`);
