@@ -4,7 +4,7 @@ Low-latency pitch recognition for recorder and other monophonic instruments usin
 
 ## Current focus
 
-Initial YIN-style detector is implemented; it needs real recorder tuning.
+Detection is constrained to a beginner soprano recorder profile; next step is real recorder tuning and smoothing.
 
 ## Next steps
 
@@ -21,6 +21,7 @@ Initial YIN-style detector is implemented; it needs real recorder tuning.
 
 | Date | What was done |
 |---|---|
+| 2026-05-08 | Added a beginner soprano recorder profile: C5-D6 detection range, 4096-sample analysis buffer, higher YIN threshold, adaptive cents tolerance, and G5/A5/B5 starter exercise. |
 | 2026-05-08 | Added a lightweight YIN-style pitch detector with note/cents conversion. |
 
 → [Back to board](../board.md)

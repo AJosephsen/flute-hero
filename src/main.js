@@ -1,5 +1,5 @@
-import { detectPitchYin, midiToName } from './pitch.js';
-import { CONFIRM_SECONDS, HIT_WINDOW_CENTS, exercise } from './song.js';
+import { detectPitchYin, midiToName, SOPRANO_RECORDER_BEGINNER, toleranceForMidi } from './pitch.js';
+import { CONFIRM_SECONDS, exercise } from './song.js';
 
 const startButton = document.querySelector('#startButton');
 const detectedNote = document.querySelector('#detectedNote');
@@ -34,7 +34,7 @@ async function startMic() {
   const audio = new AudioContext({ latencyHint: 'interactive' });
   const source = audio.createMediaStreamSource(stream);
   const analyser = audio.createAnalyser();
-  analyser.fftSize = 2048;
+  analyser.fftSize = 4096;
   analyser.smoothingTimeConstant = 0;
   source.connect(analyser);
 
@@ -59,9 +59,9 @@ function frame(now) {
 function updatePitch() {
   if (!state.analyser) return;
   state.analyser.getFloatTimeDomainData(state.buffer);
-  state.pitch = detectPitchYin(state.buffer, state.audio.sampleRate);
+  state.pitch = detectPitchYin(state.buffer, state.audio.sampleRate, SOPRANO_RECORDER_BEGINNER);
 
-  if (!state.pitch || state.pitch.confidence < 0.72) {
+  if (!state.pitch || state.pitch.confidence < 0.68) {
     detectedNote.textContent = '—';
     accuracy.textContent = 'listening';
     return;
@@ -112,8 +112,8 @@ function currentNote() {
 }
 
 function isHit(note) {
-  if (!note || !state.pitch || state.pitch.confidence < 0.72) return false;
-  return Math.abs(state.pitch.midi - note.midi) === 0 && Math.abs(state.pitch.cents) <= HIT_WINDOW_CENTS;
+  if (!note || !state.pitch || state.pitch.confidence < 0.68) return false;
+  return state.pitch.midi === note.midi && Math.abs(state.pitch.cents) <= toleranceForMidi(note.midi);
 }
 
 function render() {
@@ -129,7 +129,7 @@ function render() {
 
   const playheadX = width * 0.28;
   const pxPerSecond = 118;
-  const rows = [64, 65, 67, 69, 71, 72, 74];
+  const rows = [72, 74, 76, 77, 79, 81, 83, 84, 86];
   const rowHeight = height / rows.length;
 
   ctx.font = '15px Inter, system-ui, sans-serif';
@@ -198,7 +198,7 @@ function render() {
 
 function drawCurrentPitchIndicator(rows, rowHeight, playheadX, width) {
   const labelX = width - 118;
-  if (!state.pitch || state.pitch.confidence < 0.72) {
+  if (!state.pitch || state.pitch.confidence < 0.68) {
     ctx.save();
     ctx.globalAlpha = 0.62;
     ctx.strokeStyle = 'rgba(255,248,255,.28)';
@@ -226,7 +226,7 @@ function drawCurrentPitchIndicator(rows, rowHeight, playheadX, width) {
   const y = rowY(nearestIndex, rowHeight) - (centsFromLane / 100) * rowHeight * 0.82;
   const clampedY = Math.max(22, Math.min(canvas.height - 22, y));
   const x = playheadX + 42;
-  const close = Math.abs(state.pitch.cents) <= HIT_WINDOW_CENTS;
+  const close = Math.abs(state.pitch.cents) <= toleranceForMidi(state.pitch.midi);
 
   ctx.save();
   ctx.shadowColor = close ? 'rgba(133,255,208,.95)' : 'rgba(255,215,106,.72)';

@@ -52,7 +52,7 @@ await page.addInitScript(() => {
     const destination = audio.createMediaStreamDestination();
 
     oscillator.type = 'sine';
-    oscillator.frequency.value = 440;
+    oscillator.frequency.value = 880;
     gain.gain.value = 0.22;
     oscillator.connect(gain).connect(destination);
     oscillator.start();
@@ -66,7 +66,7 @@ try {
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.locator('#startButton').click();
   await page.waitForFunction(() => document.querySelector('#startButton')?.textContent?.includes('Listening'));
-  await page.waitForFunction(() => document.querySelector('#detectedNote')?.textContent?.includes('A4'), null, { timeout: 5000 });
+  await page.waitForFunction(() => document.querySelector('#detectedNote')?.textContent?.includes('A5'), null, { timeout: 5000 });
 
   const result = await page.evaluate(() => ({
     detected: document.querySelector('#detectedNote')?.textContent,

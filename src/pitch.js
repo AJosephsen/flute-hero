@@ -1,5 +1,14 @@
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 
+export const SOPRANO_RECORDER_BEGINNER = {
+  name: 'Soprano recorder beginner',
+  minMidi: 72, // C5
+  maxMidi: 86, // D6
+  minFrequency: midiToFrequency(72) * 2 ** (-80 / 1200),
+  maxFrequency: midiToFrequency(86) * 2 ** (80 / 1200),
+  threshold: 0.2,
+};
+
 export function frequencyToMidi(freq) {
   return Math.round(69 + 12 * Math.log2(freq / 440));
 }
@@ -17,10 +26,10 @@ export function centsOff(freq, midi) {
   return 1200 * Math.log2(freq / midiToFrequency(midi));
 }
 
-export function detectPitchYin(floatBuffer, sampleRate) {
-  const threshold = 0.12;
-  const minFreq = 120;
-  const maxFreq = 1200;
+export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORDER_BEGINNER) {
+  const threshold = profile.threshold ?? 0.12;
+  const minFreq = profile.minFrequency ?? 120;
+  const maxFreq = profile.maxFrequency ?? 1200;
   const minTau = Math.floor(sampleRate / maxFreq);
   const maxTau = Math.min(Math.floor(sampleRate / minFreq), floatBuffer.length - 2);
   const yin = new Float32Array(maxTau + 1);
@@ -55,8 +64,12 @@ export function detectPitchYin(floatBuffer, sampleRate) {
 
   const betterTau = parabolicInterpolate(yin, tauEstimate);
   const frequency = sampleRate / betterTau;
-  const confidence = Math.max(0, Math.min(1, 1 - yin[tauEstimate]));
   const midi = frequencyToMidi(frequency);
+  if (profile.minMidi != null && profile.maxMidi != null && (midi < profile.minMidi || midi > profile.maxMidi)) {
+    return null;
+  }
+
+  const confidence = Math.max(0, Math.min(1, 1 - yin[tauEstimate]));
 
   return {
     frequency,
@@ -65,6 +78,13 @@ export function detectPitchYin(floatBuffer, sampleRate) {
     cents: centsOff(frequency, midi),
     confidence,
   };
+}
+
+export function toleranceForMidi(midi) {
+  // Lower beginner recorder notes speak less cleanly; give them a slightly wider gate.
+  if (midi <= 74) return 75; // C5-D5
+  if (midi <= 79) return 65; // E5-G5
+  return 55; // A5-D6
 }
 
 function parabolicInterpolate(values, tau) {
