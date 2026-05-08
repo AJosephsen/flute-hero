@@ -4,13 +4,13 @@ Shape the rhythm-game loop: scrolling notes, target matching, completion modes, 
 
 ## Current focus
 
-The first pass supports timed, hold, and confirm note modes.
+The note lane now shows the live detected pitch as an in-canvas indicator; next step is richer scoring/feedback.
 
 ## Next steps
 
-1. Refine per-note completion state and feedback.
-2. Add simple scoring for hit ratio, hold stability, and streaks.
-3. Add pause/restart and exercise completion states.
+1. Add simple scoring for hit ratio, hold stability, and streaks.
+2. Add pause/restart and exercise completion states.
+3. Tune live pitch indicator placement after physical recorder testing.
 
 ## Key files
 
@@ -21,6 +21,7 @@ The first pass supports timed, hold, and confirm note modes.
 
 | Date | What was done |
 |---|---|
+| 2026-05-08 | Added an in-canvas current pitch indicator showing detected note/cents near the playhead. |
 | 2026-05-08 | Implemented a fixed-playhead scrolling lane and first-pass note completion modes: timed, hold, confirm. |
 
 → [Back to board](../board.md)

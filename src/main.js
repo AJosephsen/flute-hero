@@ -154,6 +154,8 @@ function render() {
     ctx.fillText(midiToName(midi), 20, y);
   });
 
+  drawCurrentPitchIndicator(rows, rowHeight, playheadX, width);
+
   for (const note of exercise.notes) {
     const index = rows.indexOf(note.midi);
     if (index < 0) continue;
@@ -192,6 +194,70 @@ function render() {
   }
 
   drawPlayhead(playheadX, height);
+}
+
+function drawCurrentPitchIndicator(rows, rowHeight, playheadX, width) {
+  const labelX = width - 118;
+  if (!state.pitch || state.pitch.confidence < 0.72) {
+    ctx.save();
+    ctx.globalAlpha = 0.62;
+    ctx.strokeStyle = 'rgba(255,248,255,.28)';
+    ctx.setLineDash([7, 8]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(playheadX + 42, 18);
+    ctx.lineTo(playheadX + 42, canvas.height - 18);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,248,255,.72)';
+    ctx.font = '700 14px Inter, system-ui, sans-serif';
+    ctx.fillText('play here', playheadX + 54, 34);
+    ctx.restore();
+    return;
+  }
+
+  const exactMidi = state.pitch.midi + state.pitch.cents / 100;
+  let nearestIndex = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (Math.abs(rows[i] - exactMidi) < Math.abs(rows[nearestIndex] - exactMidi)) nearestIndex = i;
+  }
+  const nearestMidi = rows[nearestIndex];
+  const centsFromLane = Math.max(-75, Math.min(75, (exactMidi - nearestMidi) * 100));
+  const y = rowY(nearestIndex, rowHeight) - (centsFromLane / 100) * rowHeight * 0.82;
+  const clampedY = Math.max(22, Math.min(canvas.height - 22, y));
+  const x = playheadX + 42;
+  const close = Math.abs(state.pitch.cents) <= HIT_WINDOW_CENTS;
+
+  ctx.save();
+  ctx.shadowColor = close ? 'rgba(133,255,208,.95)' : 'rgba(255,215,106,.72)';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = close ? '#85ffd0' : '#ffd76a';
+  ctx.strokeStyle = '#fff8ff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(x, clampedY, 13, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#160d2f';
+  ctx.font = '900 12px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('♪', x, clampedY + 1);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = 'rgba(17,10,39,.82)';
+  roundRect(ctx, labelX, clampedY - 18, 94, 36, 18);
+  ctx.fill();
+  ctx.strokeStyle = close ? 'rgba(133,255,208,.72)' : 'rgba(255,215,106,.65)';
+  ctx.stroke();
+  ctx.fillStyle = '#fff8ff';
+  ctx.font = '800 14px Inter, system-ui, sans-serif';
+  ctx.fillText(state.pitch.note, labelX + 14, clampedY - 4);
+  ctx.fillStyle = close ? '#85ffd0' : '#ffd76a';
+  ctx.font = '700 11px Inter, system-ui, sans-serif';
+  ctx.fillText(`${state.pitch.cents > 0 ? '+' : ''}${state.pitch.cents.toFixed(0)}¢`, labelX + 14, clampedY + 10);
+  ctx.restore();
 }
 
 function modeLabel(mode) {
