@@ -24,4 +24,13 @@ python3 -m http.server 8765
 # open http://127.0.0.1:8765/flute-hero/
 ```
 
-No build step. No dependencies.
+No build step. No runtime dependencies.
+
+## Browser verification
+
+A Playwright smoke test launches a real Chromium instance, injects a synthetic microphone stream, clicks the mic button, and verifies that WebAudio pitch detection reports `A4` without browser errors.
+
+```bash
+npm install
+npm run verify:browser
+```

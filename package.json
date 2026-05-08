@@ -1,0 +1,14 @@
+{
+  "name": "flute-hero",
+  "version": "1.0.0",
+  "description": "Browser-native rhythm game for learning recorder / flute-style monophonic instruments.",
+  "scripts": {
+    "test": "npm run verify:browser",
+    "verify:browser": "node scripts/browser-verify.mjs"
+  },
+  "type": "module",
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  },
+  "private": "true"
+}
