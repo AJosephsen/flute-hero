@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>flute-hero</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="hero">
+      <p class="eyebrow">recorder rhythm trainer</p>
+      <h1>flute-hero</h1>
+      <p class="lede">Hit the note, hold the tone, let the song unlock around you.</p>
+      <button id="startButton" type="button">Enable microphone</button>
+    </section>
+
+    <section class="panel meters" aria-live="polite">
+      <div>
+        <span class="label">Detected</span>
+        <strong id="detectedNote">—</strong>
+      </div>
+      <div>
+        <span class="label">Target</span>
+        <strong id="targetNote">—</strong>
+      </div>
+      <div>
+        <span class="label">Accuracy</span>
+        <strong id="accuracy">—</strong>
+      </div>
+    </section>
+
+    <section class="panel lane-wrap">
+      <canvas id="noteLane" width="960" height="320" aria-label="Scrolling note lane"></canvas>
+    </section>
+
+    <section class="panel hint">
+      <h2>Prototype exercise</h2>
+      <p>Play long beginner notes near the fixed playhead. Green means close enough; amber means keep searching.</p>
+    </section>
+  </main>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
