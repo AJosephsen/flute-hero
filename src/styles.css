@@ -21,9 +21,10 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
+    linear-gradient(180deg, rgba(9, 7, 26, .28), rgba(9, 7, 26, .88) 58%, rgba(6, 6, 18, .96)),
     radial-gradient(circle at 18% 12%, rgba(255, 230, 145, .20), transparent 16rem),
     radial-gradient(circle at 82% 8%, rgba(151, 111, 255, .30), transparent 18rem),
-    radial-gradient(circle at 52% 92%, rgba(73, 231, 255, .12), transparent 20rem),
+    url("../art/backgrounds/moonlit-classroom-background.png") center top / cover fixed,
     linear-gradient(180deg, #181039 0%, #0c0921 52%, #060612 100%);
   overflow-x: hidden;
 }
