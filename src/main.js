@@ -119,24 +119,39 @@ function isHit(note) {
 function render() {
   const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = '#0c1020';
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, '#22124c');
+  gradient.addColorStop(0.55, '#120c2f');
+  gradient.addColorStop(1, '#070916');
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
+  drawStars(width, height);
 
   const playheadX = width * 0.28;
   const pxPerSecond = 118;
   const rows = [64, 65, 67, 69, 71, 72, 74];
   const rowHeight = height / rows.length;
 
-  ctx.strokeStyle = 'rgba(255,255,255,.08)';
-  ctx.lineWidth = 1;
+  ctx.font = '15px Inter, system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
   rows.forEach((midi, index) => {
     const y = rowY(index, rowHeight);
+    const laneGradient = ctx.createLinearGradient(0, y - rowHeight * 0.34, 0, y + rowHeight * 0.34);
+    laneGradient.addColorStop(0, 'rgba(255,255,255,.055)');
+    laneGradient.addColorStop(1, 'rgba(116,247,255,.018)');
+    ctx.fillStyle = laneGradient;
+    roundRect(ctx, 70, y - rowHeight * 0.32, width - 96, rowHeight * 0.64, 18);
+    ctx.fill();
+
+    ctx.strokeStyle = 'rgba(189,140,255,.18)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y);
+    ctx.moveTo(78, y);
+    ctx.lineTo(width - 24, y);
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.38)';
-    ctx.fillText(midiToName(midi), 18, y - 8);
+
+    ctx.fillStyle = 'rgba(236,226,255,.74)';
+    ctx.fillText(midiToName(midi), 20, y);
   });
 
   for (const note of exercise.notes) {
@@ -147,19 +162,64 @@ function render() {
     const y = rowY(index, rowHeight) - rowHeight * 0.32;
     const hit = isHit(note);
     const done = state.completed.has(note.start) || state.songTime > note.start + note.duration;
-    ctx.fillStyle = done ? '#3a476f' : hit ? '#72f5b4' : '#ffca72';
+    const noteGradient = ctx.createLinearGradient(x, y, x + w, y + rowHeight * 0.6);
+    if (done) {
+      noteGradient.addColorStop(0, '#40315f');
+      noteGradient.addColorStop(1, '#2c254c');
+    } else if (hit) {
+      noteGradient.addColorStop(0, '#e9fff6');
+      noteGradient.addColorStop(0.45, '#85ffd0');
+      noteGradient.addColorStop(1, '#54d9ff');
+      ctx.shadowColor = 'rgba(116,247,255,.72)';
+      ctx.shadowBlur = 18;
+    } else {
+      noteGradient.addColorStop(0, '#ffe8a4');
+      noteGradient.addColorStop(0.5, '#cfa4ff');
+      noteGradient.addColorStop(1, '#ff93c8');
+      ctx.shadowColor = 'rgba(189,140,255,.35)';
+      ctx.shadowBlur = 10;
+    }
+    ctx.fillStyle = noteGradient;
     roundRect(ctx, x, y, w, rowHeight * 0.6, 16);
     ctx.fill();
-    ctx.fillStyle = '#06101f';
-    ctx.fillText(`${note.note} · ${note.mode}`, x + 12, y + 25);
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = done ? '#c8bde8' : '#160d2f';
+    ctx.fillText(`${note.note} · ${note.mode}`, x + 14, y + rowHeight * 0.3);
+
+    ctx.fillStyle = hit ? '#fff8b4' : 'rgba(255,248,255,.78)';
+    ctx.beginPath();
+    ctx.arc(x + Math.min(w - 18, 22), y + rowHeight * 0.3, 6, 0, Math.PI * 2);
+    ctx.fill();
   }
 
-  ctx.strokeStyle = '#8bd7ff';
+  ctx.shadowColor = 'rgba(116,247,255,.85)';
+  ctx.shadowBlur = 18;
+  ctx.strokeStyle = '#a7f8ff';
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(playheadX, 0);
   ctx.lineTo(playheadX, height);
   ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#fff0a7';
+  ctx.beginPath();
+  ctx.arc(playheadX, 24, 8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawStars(width, height) {
+  const stars = [
+    [104, 38, 1.4], [184, 246, 1.0], [314, 72, 1.2], [472, 282, 1.1],
+    [612, 46, 1.5], [744, 238, 1.0], [872, 88, 1.3], [924, 292, 1.0],
+  ];
+  ctx.fillStyle = 'rgba(255, 240, 167, .72)';
+  for (const [x, y, r] of stars) {
+    ctx.beginPath();
+    ctx.arc(x % width, y % height, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function rowY(index, rowHeight) {

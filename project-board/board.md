@@ -6,7 +6,7 @@ Browser-native rhythm game for learning recorder / flute-style monophonic instru
 
 | Track | Status | Goal | Next | Updated |
 |---|---|---|---|---|
-| [foundation](tracks/foundation.md) | active | Establish the zero-dependency playable prototype shell | Decide whether the first renderer should stay Canvas or split into DOM/SVG for easier note editing | 2026-05-08 |
+| [foundation](tracks/foundation.md) | active | Establish the zero-dependency playable prototype shell | Re-run verification with a physical recorder/microphone and capture tolerance notes | 2026-05-08 |
 | [pitch-detection](tracks/pitch-detection.md) | active | Low-latency, stable monophonic tone recognition for recorder | Tune confidence/hysteresis against real recorder input | 2026-05-08 |
 | [gameplay](tracks/gameplay.md) | active | Define note completion modes and scoring feel | Refine per-note completion state and feedback | 2026-05-08 |
 | [songs](tracks/songs.md) | idle | Seed easy recorder melodies and exercises | Add a tiny song/exercise format with beginner songs | 2026-05-08 |
