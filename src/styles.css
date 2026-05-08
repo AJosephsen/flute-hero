@@ -89,11 +89,7 @@ strong { font-size: 28px; color: #fff; text-shadow: 0 0 14px rgba(116,247,255,.2
 .lane-label img { width: 30px; height: 30px; }
 canvas { display: block; width: 100%; height: auto; margin-top: 4px; }
 .debug {
-  position: fixed;
-  z-index: 10;
-  right: 16px;
-  bottom: 16px;
-  width: min(420px, calc(100vw - 32px));
+  margin-top: 18px;
   padding: 0;
   overflow: hidden;
 }

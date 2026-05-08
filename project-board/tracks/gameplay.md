@@ -21,6 +21,7 @@ The note lane now shows the live detected pitch as an in-canvas indicator; next 
 
 | Date | What was done |
 |---|---|
+| 2026-05-08 | Removed the fixed debug overlay and made debug a collapsed normal-flow panel so it cannot cover gameplay or mobile content. |
 | 2026-05-08 | Moved the lane header out of the canvas overlay so it does not cover notes on iPhone/mobile layouts. |
 | 2026-05-08 | Added an in-canvas current pitch indicator showing detected note/cents near the playhead. |
 | 2026-05-08 | Implemented a fixed-playhead scrolling lane and first-pass note completion modes: timed, hold, confirm. |
