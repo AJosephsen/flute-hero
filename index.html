@@ -2,29 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="flute-hero" />
+  <meta name="theme-color" content="#09071a" />
+  <link rel="manifest" href="./manifest.json" />
   <title>flute-hero</title>
   <link rel="stylesheet" href="./src/styles.css" />
 </head>
 <body>
   <main class="app">
+    <!-- home / level-select / complete screens render here -->
     <div class="dynamic-ui"></div>
 
-    <section class="panel lane-wrap">
-      <div class="lane-label"><img src="./art/ui/star-badge.svg" alt="" /> Magic note path</div>
-      <canvas id="noteLane" width="960" height="320" aria-label="Scrolling note lane"></canvas>
-    </section>
-
-    <details class="panel debug" aria-label="Debug timing and pitch telemetry">
-      <summary>Debug</summary>
-      <dl>
-        <div><dt>Frame</dt><dd id="debugFrameTime">—</dd></div>
-        <div><dt>Audio latency</dt><dd id="debugAudioLatency">—</dd></div>
-        <div><dt>Frequency</dt><dd id="debugFrequency">—</dd></div>
-        <div><dt>Confidence</dt><dd id="debugConfidence">—</dd></div>
-      </dl>
-    </details>
+    <!-- always-present lane: hidden on home/levels, fullscreen during play -->
+    <div class="lane-shell" id="laneShell">
+      <canvas id="noteLane" aria-label="Scrolling note lane"></canvas>
+    </div>
   </main>
+
+  <!-- fixed debug panel, always in corner -->
+  <details class="debug-panel" id="debugPanel" aria-label="Debug">
+    <summary>✦</summary>
+    <dl>
+      <div><dt>Frame</dt><dd id="debugFrameTime">—</dd></div>
+      <div><dt>Latency</dt><dd id="debugAudioLatency">—</dd></div>
+      <div><dt>Freq</dt><dd id="debugFrequency">—</dd></div>
+      <div><dt>Conf</dt><dd id="debugConfidence">—</dd></div>
+    </dl>
+  </details>
 
   <script type="module" src="./src/main.js"></script>
 </body>

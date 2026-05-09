@@ -1,0 +1,13 @@
+{
+  "name": "flute-hero",
+  "short_name": "flute-hero",
+  "description": "Moonlit recorder rhythm game",
+  "display": "standalone",
+  "orientation": "any",
+  "start_url": "/",
+  "background_color": "#09071a",
+  "theme_color": "#09071a",
+  "icons": [
+    { "src": "art/ui/raccoon-mascot.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
