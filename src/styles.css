@@ -293,3 +293,80 @@ h1 {
 }
 .complete-actions button:hover, .complete-actions button:active { background: rgba(189,140,255,.2); border-color: var(--magic); }
 .complete-actions button:first-child { background: linear-gradient(135deg, #fff0a7, #8fffe0 58%, #cba0ff); color: #140d2d; border: none; }
+
+/* ── Score panel (inside .play-hud) ──────────────────────────────────────── */
+.score-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 110px;
+  background: rgba(9,7,26,.72);
+  border: 1px solid rgba(226,204,255,.18);
+  border-radius: 14px;
+  padding: 6px 12px;
+  box-shadow: 0 0 22px rgba(189,140,255,.18), inset 0 1px 0 rgba(255,255,255,.06);
+}
+.score-top-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  justify-content: space-between;
+}
+.score-streak-lbl {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffd76a;
+  min-width: 44px;
+  letter-spacing: .02em;
+  transition: opacity .2s;
+}
+.score-pts {
+  font-size: 22px;
+  font-weight: 900;
+  color: #fff8ff;
+  letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 16px rgba(116,247,255,.55);
+  transition: transform .1s;
+}
+.score-pts.pulse {
+  transform: scale(1.14);
+  text-shadow: 0 0 24px rgba(116,247,255,.95);
+}
+
+/* health bar */
+.health-bar-wrap {
+  width: 100%;
+  height: 7px;
+  background: rgba(255,255,255,.10);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.health-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff3344 0%, #44ff88 100%);
+  transition: width .18s ease, background .4s ease;
+  box-shadow: 0 0 8px rgba(68,255,136,.6);
+  will-change: width, transform;
+}
+
+/* complete screen: score line */
+.complete-score {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--glow);
+  margin: 0;
+  letter-spacing: -.02em;
+  text-shadow: 0 0 18px rgba(116,247,255,.5);
+}
+
+/* make HUD flex-wrap-friendly so score panel stays right */
+.play-hud { flex-wrap: wrap; }
+@media (max-width: 520px) {
+  .score-panel { min-width: 90px; }
+  .score-pts { font-size: 17px; }
+  .hud-meters { display: none; } /* hide pitch pills on tiny screens, info is on canvas */
+}
