@@ -10,6 +10,6 @@ Browser-native rhythm game for learning recorder / flute-style monophonic instru
 | [pitch-detection](tracks/pitch-detection.md) | active | Low-latency, stable monophonic tone recognition for recorder | Tune confidence/hysteresis against real recorder input | 2026-05-08 |
 | [gameplay](tracks/gameplay.md) | active | Define note completion modes and scoring feel | Add simple scoring for hit ratio, hold stability, and streaks | 2026-05-08 |
 | [visual-design](tracks/visual-design.md) | active | Build the cute moonlit animal classroom art direction into usable web assets | Add one more cute guide/feedback state for the raccoon mascot | 2026-05-08 |
-| [songs](tracks/songs.md) | idle | Seed easy recorder melodies and exercises | Add a tiny song/exercise format with beginner songs | 2026-05-08 |
+| [songs](tracks/songs.md) | active | Seed easy recorder melodies and exercises | 3-level bundle system shipped; 9 real songs. Next: verify on physical recorder | 2026-05-08 |
 | [adaptive-backing](tracks/adaptive-backing.md) | idle | Add beats/instruments that reward strong playing | Sketch first metronome/drum reward layer | 2026-05-08 |
 | [adhoc](tracks/adhoc.md) | ongoing | — | — | 2026-05-08 |

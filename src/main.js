@@ -1,10 +1,8 @@
 import { detectPitchYin, midiToName, SOPRANO_RECORDER_BEGINNER, toleranceForMidi } from './pitch.js';
-import { CONFIRM_SECONDS, exercise } from './song.js';
+import { LEVELS, CONFIRM_SECONDS } from './songs.js';
+import { isSongUnlocked, isLevelUnlocked, isLevelCompleted, isSongCompleted, markSongComplete } from './progress.js';
 
-const startButton = document.querySelector('#startButton');
-const detectedNote = document.querySelector('#detectedNote');
-const targetNote = document.querySelector('#targetNote');
-const accuracy = document.querySelector('#accuracy');
+// ── Canvas + DOM refs ────────────────────────────────────────────────────────
 const canvas = document.querySelector('#noteLane');
 const ctx = canvas.getContext('2d');
 const debugFrameTime = document.querySelector('#debugFrameTime');
@@ -12,305 +10,458 @@ const debugAudioLatency = document.querySelector('#debugAudioLatency');
 const debugFrequency = document.querySelector('#debugFrequency');
 const debugConfidence = document.querySelector('#debugConfidence');
 
-const state = {
-  audio: null,
-  analyser: null,
-  buffer: null,
+// ── Screen state ─────────────────────────────────────────────────────────────
+// screens: 'home' | 'levels' | 'playing' | 'complete'
+let screen = 'home';
+let activeLevelIdx = 0;
+let activeSongIdx = 0;
+
+// ── Audio state ──────────────────────────────────────────────────────────────
+const audio = { ctx: null, analyser: null, buffer: null };
+
+// ── Game state ───────────────────────────────────────────────────────────────
+const game = {
   pitch: null,
-  startedAt: 0,
   songTime: 0,
   lastFrame: performance.now(),
   heldCorrectFor: new Map(),
   completed: new Set(),
+  song: null,
+  songFinished: false,
 };
 
-startButton.addEventListener('click', startMic);
+// ── Boot ─────────────────────────────────────────────────────────────────────
+buildHomeScreen();
 requestAnimationFrame(frame);
 
-async function startMic() {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-  });
-  const audio = new AudioContext({ latencyHint: 'interactive' });
-  const source = audio.createMediaStreamSource(stream);
-  const analyser = audio.createAnalyser();
-  analyser.fftSize = 4096;
-  analyser.smoothingTimeConstant = 0;
-  source.connect(analyser);
-
-  state.audio = audio;
-  state.analyser = analyser;
-  state.buffer = new Float32Array(analyser.fftSize);
-  state.startedAt = performance.now();
-  startButton.textContent = 'Listening';
-  startButton.classList.add('listening');
-}
-
+// ── Frame loop ───────────────────────────────────────────────────────────────
 function frame(now) {
-  const dt = Math.min(0.05, (now - state.lastFrame) / 1000);
-  state.lastFrame = now;
+  const dt = Math.min(0.05, (now - game.lastFrame) / 1000);
+  game.lastFrame = now;
+
   updatePitch();
-  updateGame(dt);
-  render();
+  if (screen === 'playing') updateGame(dt);
+  renderCanvas();
   updateDebug(dt);
   requestAnimationFrame(frame);
 }
 
-function updatePitch() {
-  if (!state.analyser) return;
-  state.analyser.getFloatTimeDomainData(state.buffer);
-  state.pitch = detectPitchYin(state.buffer, state.audio.sampleRate, SOPRANO_RECORDER_BEGINNER);
+// ── Audio / pitch ────────────────────────────────────────────────────────────
+async function startMic() {
+  if (audio.ctx) return; // already started
+  const stream = await navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+  });
+  audio.ctx = new AudioContext({ latencyHint: 'interactive' });
+  const source = audio.ctx.createMediaStreamSource(stream);
+  audio.analyser = audio.ctx.createAnalyser();
+  audio.analyser.fftSize = 4096;
+  audio.analyser.smoothingTimeConstant = 0;
+  source.connect(audio.analyser);
+  audio.buffer = new Float32Array(audio.analyser.fftSize);
+}
 
-  if (!state.pitch || state.pitch.confidence < 0.68) {
-    detectedNote.textContent = '—';
-    accuracy.textContent = 'listening';
-    return;
-  }
-  detectedNote.textContent = `${state.pitch.note} ${state.pitch.cents > 0 ? '+' : ''}${state.pitch.cents.toFixed(0)}¢`;
+function updatePitch() {
+  if (!audio.analyser) { game.pitch = null; return; }
+  audio.analyser.getFloatTimeDomainData(audio.buffer);
+  const p = detectPitchYin(audio.buffer, audio.ctx.sampleRate, SOPRANO_RECORDER_BEGINNER);
+  game.pitch = p?.confidence >= 0.68 ? p : null;
+}
+
+// ── Game logic ───────────────────────────────────────────────────────────────
+function startSong(levelIdx, songIdx) {
+  activeLevelIdx = levelIdx;
+  activeSongIdx = songIdx;
+  game.song = LEVELS[levelIdx].songs[songIdx];
+  game.songTime = 0;
+  game.heldCorrectFor = new Map();
+  game.completed = new Set();
+  game.songFinished = false;
+  screen = 'playing';
+  buildPlayingScreen();
 }
 
 function updateGame(dt) {
-  const current = currentNote();
-  targetNote.textContent = current ? `${current.note} · ${current.mode}` : '—';
+  if (game.songFinished) return;
+  const song = game.song;
+  const notes = song.notes;
 
-  const hit = isHit(current);
-  if (current && hit) {
-    state.heldCorrectFor.set(current.start, (state.heldCorrectFor.get(current.start) ?? 0) + dt);
+  const current = currentNote(game.songTime, notes);
+
+  if (current) {
+    const hit = isHit(current);
+    const key = current.start;
+
+    if (hit) {
+      game.heldCorrectFor.set(key, (game.heldCorrectFor.get(key) ?? 0) + dt);
+    }
+
+    const held = game.heldCorrectFor.get(key) ?? 0;
+
+    if (current.mode === 'timed') {
+      // Song time always flows — note auto-completes when it leaves the window
+      game.songTime += dt;
+    } else if (current.mode === 'hold') {
+      // Song only advances while the note is held
+      if (hit) {
+        game.songTime += dt;
+        game.completed.add(key);
+      }
+    } else if (current.mode === 'confirm') {
+      // Song only advances after holding the note long enough
+      if (hit && held >= CONFIRM_SECONDS) {
+        game.completed.add(key);
+        game.songTime += dt;
+      } else if (hit) {
+        game.songTime += dt;
+      }
+    }
+  } else {
+    // Between notes or after all notes: advance normally
+    const lastNote = notes[notes.length - 1];
+    const songEnd = lastNote ? lastNote.start + lastNote.duration + 1.5 : 0;
+
+    if (game.songTime >= songEnd) {
+      finishSong();
+      return;
+    }
+    game.songTime += dt;
   }
-
-  if (current?.mode === 'hold' && !hit) {
-    accuracy.textContent = 'hold to move';
-    return;
-  }
-
-  if (current?.mode === 'confirm' && (state.heldCorrectFor.get(current.start) ?? 0) >= CONFIRM_SECONDS) {
-    state.completed.add(current.start);
-  }
-
-  state.songTime += dt;
-  accuracy.textContent = current ? (hit ? 'hit' : 'search') : 'done';
 }
 
-function updateDebug(dt) {
-  debugFrameTime.textContent = `${(dt * 1000).toFixed(1)} ms`;
-
-  if (!state.audio) {
-    debugAudioLatency.textContent = 'mic off';
-    debugFrequency.textContent = '—';
-    debugConfidence.textContent = '—';
-    return;
-  }
-
-  const latencyMs = ((state.audio.baseLatency ?? 0) + (state.audio.outputLatency ?? 0)) * 1000;
-  debugAudioLatency.textContent = latencyMs > 0 ? `${latencyMs.toFixed(1)} ms` : 'unknown';
-  debugFrequency.textContent = state.pitch ? `${state.pitch.frequency.toFixed(1)} Hz` : '—';
-  debugConfidence.textContent = state.pitch ? `${Math.round(state.pitch.confidence * 100)}%` : '—';
-}
-
-function currentNote() {
-  return exercise.notes.find(note => state.songTime >= note.start && state.songTime <= note.start + note.duration);
+function currentNote(songTime, notes) {
+  return notes.find(n => songTime >= n.start && songTime < n.start + n.duration) ?? null;
 }
 
 function isHit(note) {
-  if (!note || !state.pitch || state.pitch.confidence < 0.68) return false;
-  return state.pitch.midi === note.midi && Math.abs(state.pitch.cents) <= toleranceForMidi(note.midi);
+  if (!note || !game.pitch) return false;
+  return game.pitch.midi === note.midi && Math.abs(game.pitch.cents) <= toleranceForMidi(note.midi);
 }
 
-function render() {
-  const { width, height } = canvas;
-  ctx.clearRect(0, 0, width, height);
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, '#22124c');
-  gradient.addColorStop(0.55, '#120c2f');
-  gradient.addColorStop(1, '#070916');
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, width, height);
-  drawStars(width, height);
+function finishSong() {
+  game.songFinished = true;
+  markSongComplete(activeLevelIdx, activeSongIdx);
+  screen = 'complete';
+  buildCompleteScreen();
+}
 
-  const playheadX = width * 0.28;
-  const pxPerSecond = 118;
-  const rows = [72, 74, 76, 77, 79, 81, 83, 84, 86];
-  const rowHeight = height / rows.length;
+// ── Screen builders ──────────────────────────────────────────────────────────
 
-  ctx.font = '15px Inter, system-ui, sans-serif';
-  ctx.textBaseline = 'middle';
-  rows.forEach((midi, index) => {
-    const y = rowY(index, rowHeight);
-    const laneGradient = ctx.createLinearGradient(0, y - rowHeight * 0.34, 0, y + rowHeight * 0.34);
-    laneGradient.addColorStop(0, 'rgba(255,255,255,.055)');
-    laneGradient.addColorStop(1, 'rgba(116,247,255,.018)');
-    ctx.fillStyle = laneGradient;
-    roundRect(ctx, 70, y - rowHeight * 0.32, width - 96, rowHeight * 0.64, 18);
-    ctx.fill();
+function setMain(html) {
+  document.querySelector('.dynamic-ui').innerHTML = html;
+}
 
-    ctx.strokeStyle = 'rgba(189,140,255,.18)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(78, y);
-    ctx.lineTo(width - 24, y);
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(236,226,255,.74)';
-    ctx.fillText(midiToName(midi), 20, y);
+function buildHomeScreen() {
+  screen = 'home';
+  setMain(`
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">moonlit music school</p>
+        <h1>flute-hero</h1>
+        <p class="lede">Follow the glowing music trail, play the recorder note, and wake the little classroom stars.</p>
+        <button id="btnStart" type="button">
+          <img src="./art/ui/recorder-icon.svg" alt="" /> Let's Play
+        </button>
+      </div>
+      <img class="mascot" src="./art/ui/raccoon-mascot.svg" alt="A cute raccoon recorder student" />
+    </section>
+  `);
+  document.querySelector('#btnStart').addEventListener('click', async () => {
+    await startMic();
+    buildLevelsScreen();
   });
+}
 
-  drawCurrentPitchIndicator(rows, rowHeight, playheadX, width);
+function buildLevelsScreen() {
+  screen = 'levels';
+  const levelCards = LEVELS.map((level, li) => {
+    const unlocked = isLevelUnlocked(li, LEVELS);
+    const complete = isLevelCompleted(li, level.songs.length);
+    const songItems = level.songs.map((song, si) => {
+      const songUnlocked = isSongUnlocked(li, si, LEVELS);
+      const songDone = isSongCompleted(li, si);
+      const badge = songDone ? '⭐' : songUnlocked ? '♪' : '🔒';
+      return `
+        <button class="song-btn ${songUnlocked ? '' : 'locked'} ${songDone ? 'done' : ''}"
+          data-level="${li}" data-song="${si}" ${songUnlocked ? '' : 'disabled'}>
+          <span class="song-badge">${badge}</span>
+          <span class="song-title">${song.title}</span>
+          <span class="song-tempo">${song.tempo} bpm</span>
+        </button>
+      `;
+    }).join('');
 
-  for (const note of exercise.notes) {
-    const index = rows.indexOf(note.midi);
-    if (index < 0) continue;
-    const x = playheadX + (note.start - state.songTime) * pxPerSecond;
-    const w = note.duration * pxPerSecond;
-    const y = rowY(index, rowHeight) - rowHeight * 0.32;
-    const hit = isHit(note);
-    const done = state.completed.has(note.start) || state.songTime > note.start + note.duration;
-    const noteGradient = ctx.createLinearGradient(x, y, x + w, y + rowHeight * 0.6);
-    if (done) {
-      noteGradient.addColorStop(0, '#40315f');
-      noteGradient.addColorStop(1, '#2c254c');
-    } else if (hit) {
-      noteGradient.addColorStop(0, '#e9fff6');
-      noteGradient.addColorStop(0.45, '#85ffd0');
-      noteGradient.addColorStop(1, '#54d9ff');
-      ctx.shadowColor = 'rgba(116,247,255,.72)';
-      ctx.shadowBlur = 18;
-    } else {
-      noteGradient.addColorStop(0, '#ffe8a4');
-      noteGradient.addColorStop(0.5, '#cfa4ff');
-      noteGradient.addColorStop(1, '#ff93c8');
-      ctx.shadowColor = 'rgba(189,140,255,.35)';
-      ctx.shadowBlur = 10;
-    }
-    ctx.fillStyle = noteGradient;
-    roundRect(ctx, x, y, w, rowHeight * 0.6, 16);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    return `
+      <div class="level-card ${unlocked ? '' : 'locked'}">
+        <div class="level-header">
+          <span class="level-num">Level ${li + 1}</span>
+          <span class="level-name">${level.name}</span>
+          ${complete ? '<span class="level-badge">✓ Complete</span>' : ''}
+          ${!unlocked ? '<span class="level-badge locked-badge">🔒 Locked</span>' : ''}
+        </div>
+        <p class="level-desc">${level.description}</p>
+        <div class="song-list">${songItems}</div>
+      </div>
+    `;
+  }).join('');
 
-    ctx.fillStyle = done ? '#c8bde8' : '#160d2f';
-    ctx.font = '700 15px Inter, system-ui, sans-serif';
-    ctx.fillText(`${note.note} · ${modeLabel(note.mode)}`, x + 44, y + rowHeight * 0.3);
-    drawNoteNode(x + 23, y + rowHeight * 0.3, hit, done);
-    if (hit) drawSparkle(x + Math.min(w - 18, w * 0.82), y + rowHeight * 0.3, 10);
+  setMain(`
+    <section class="levels-screen">
+      <div class="levels-header">
+        <h2>Choose a Song</h2>
+        <p class="muted">Complete songs in order to unlock the next</p>
+      </div>
+      ${levelCards}
+    </section>
+  `);
+
+  document.querySelectorAll('.song-btn:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      startSong(+btn.dataset.level, +btn.dataset.song);
+    });
+  });
+}
+
+function buildPlayingScreen() {
+  const song = game.song;
+  setMain(`
+    <section class="playing-screen">
+      <div class="playing-header">
+        <button id="btnBack" class="back-btn">← Back</button>
+        <span class="playing-title">${LEVELS[activeLevelIdx].name} · ${song.title}</span>
+        <span class="mic-badge" id="micBadge">${audio.ctx ? '🎙 listening' : ''}</span>
+      </div>
+      <div class="meters panel">
+        <div><span class="label">Detected</span><strong id="detectedNote">—</strong></div>
+        <div><span class="label">Target</span><strong id="targetNote">—</strong></div>
+        <div><span class="label">Status</span><strong id="accuracy">—</strong></div>
+      </div>
+    </section>
+  `);
+  document.querySelector('#btnBack').addEventListener('click', buildLevelsScreen);
+}
+
+function buildCompleteScreen() {
+  const nextSongIdx = activeSongIdx + 1;
+  const levelComplete = isLevelCompleted(activeLevelIdx, LEVELS[activeLevelIdx].songs.length);
+  const nextLevelIdx = activeLevelIdx + 1;
+  const hasNextSong = nextSongIdx < LEVELS[activeLevelIdx].songs.length;
+  const hasNextLevel = nextLevelIdx < LEVELS.length;
+
+  let nextBtn = '';
+  if (hasNextSong) {
+    nextBtn = `<button id="btnNext">Next song →</button>`;
+  } else if (levelComplete && hasNextLevel) {
+    nextBtn = `<button id="btnNextLevel">Start Level ${nextLevelIdx + 1} →</button>`;
   }
 
-  drawPlayhead(playheadX, height);
+  setMain(`
+    <section class="complete-screen">
+      <img class="mascot mascot-celebrate" src="./art/ui/raccoon-mascot.svg" alt="" />
+      <h2>⭐ Song Complete!</h2>
+      <p class="complete-song">${game.song.title}</p>
+      ${levelComplete && hasNextLevel ? `<p class="level-unlocked">🔓 Level ${nextLevelIdx + 1} — ${LEVELS[nextLevelIdx].name} unlocked!</p>` : ''}
+      <div class="complete-actions">
+        <button id="btnRetry">↺ Play again</button>
+        ${nextBtn}
+        <button id="btnMenu">Song list</button>
+      </div>
+    </section>
+  `);
+
+  document.querySelector('#btnRetry').addEventListener('click', () => startSong(activeLevelIdx, activeSongIdx));
+  document.querySelector('#btnMenu').addEventListener('click', buildLevelsScreen);
+  document.querySelector('#btnNext')?.addEventListener('click', () => startSong(activeLevelIdx, nextSongIdx));
+  document.querySelector('#btnNextLevel')?.addEventListener('click', () => startSong(nextLevelIdx, 0));
 }
 
-function drawCurrentPitchIndicator(rows, rowHeight, playheadX, width) {
-  const labelX = width - 118;
-  if (!state.pitch || state.pitch.confidence < 0.68) {
-    ctx.save();
-    ctx.globalAlpha = 0.62;
-    ctx.strokeStyle = 'rgba(255,248,255,.28)';
-    ctx.setLineDash([7, 8]);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(playheadX + 42, 18);
-    ctx.lineTo(playheadX + 42, canvas.height - 18);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(255,248,255,.72)';
-    ctx.font = '700 14px Inter, system-ui, sans-serif';
-    ctx.fillText('play here', playheadX + 54, 34);
-    ctx.restore();
+// ── Canvas render ────────────────────────────────────────────────────────────
+function renderCanvas() {
+  const { width, height } = canvas;
+  ctx.clearRect(0, 0, width, height);
+
+  if (screen !== 'playing' && screen !== 'complete') {
+    drawStars(width, height);
     return;
   }
 
-  const exactMidi = state.pitch.midi + state.pitch.cents / 100;
-  let nearestIndex = 0;
-  for (let i = 1; i < rows.length; i++) {
-    if (Math.abs(rows[i] - exactMidi) < Math.abs(rows[nearestIndex] - exactMidi)) nearestIndex = i;
+  const song = game.song;
+  const notes = song.notes;
+  drawStars(width, height);
+
+  const SPEED = 120; // px per second
+  const playheadX = 200;
+
+  // Draw note lane background
+  const rowCount = 7; // C5 D5 E5 F5 G5 A5 B5 (+D6 bonus)
+  const rowHeight = height / (rowCount + 1);
+  const midiMin = 72; // C5
+
+  // Subtle lane lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(189,140,255,.10)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= rowCount; i++) {
+    const y = height - (i + 0.5) * rowHeight;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
   }
-  const nearestMidi = rows[nearestIndex];
-  const centsFromLane = Math.max(-75, Math.min(75, (exactMidi - nearestMidi) * 100));
-  const y = rowY(nearestIndex, rowHeight) - (centsFromLane / 100) * rowHeight * 0.82;
-  const clampedY = Math.max(22, Math.min(canvas.height - 22, y));
-  const x = playheadX + 42;
-  const close = Math.abs(state.pitch.cents) <= toleranceForMidi(state.pitch.midi);
+  ctx.restore();
+
+  // Note node rows (MIDI → y)
+  function noteY(midi) {
+    const row = midi - midiMin;
+    return height - (row + 0.5) * rowHeight;
+  }
+
+  // Draw upcoming + past notes
+  for (const note of notes) {
+    const dx = (note.start - game.songTime) * SPEED;
+    const noteX = playheadX + dx;
+    const noteEndX = playheadX + (note.start + note.duration - game.songTime) * SPEED;
+
+    if (noteEndX < -40 || noteX > width + 40) continue;
+
+    const y = noteY(note.midi);
+    const done = game.completed.has(note.start);
+    const current = currentNote(game.songTime, notes);
+    const isActive = current === note;
+    const hit = isActive && isHit(note);
+
+    // Draw note bar
+    const barX = Math.max(0, noteX);
+    const barW = noteEndX - barX;
+    if (barW > 0) {
+      ctx.save();
+      ctx.fillStyle = done
+        ? 'rgba(102,86,142,.55)'
+        : isActive && hit
+        ? 'rgba(133,255,208,.18)'
+        : 'rgba(189,140,255,.15)';
+      ctx.beginPath();
+      roundRect(ctx, barX, y - 8, barW, 16, 8);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Draw note circle
+    if (noteX > -20 && noteX < width + 20) {
+      drawNoteNode(ctx, noteX, y, hit, done, note.note);
+    }
+  }
+
+  // Playhead
+  drawPlayhead(ctx, playheadX, height);
+
+  // Current pitch indicator
+  if (game.pitch && screen === 'playing') {
+    drawPitchIndicator(ctx, game.pitch, playheadX, height, noteY, midiMin);
+  }
+
+  // DOM stat updates
+  if (screen === 'playing') {
+    const current = currentNote(game.songTime, song.notes);
+    const hit = isHit(current);
+    const detectedNote = document.querySelector('#detectedNote');
+    const targetNote = document.querySelector('#targetNote');
+    const accuracy = document.querySelector('#accuracy');
+    if (detectedNote) detectedNote.textContent = game.pitch ? `${game.pitch.note} ${game.pitch.cents > 0 ? '+' : ''}${game.pitch.cents.toFixed(0)}¢` : '—';
+    if (targetNote) targetNote.textContent = current ? current.note : game.songFinished ? 'done' : '—';
+    if (accuracy) accuracy.textContent = current ? (hit ? 'hit ✓' : 'searching…') : game.songFinished ? 'finished!' : '—';
+  }
+}
+
+function drawPitchIndicator(ctx, pitch, playheadX, height, noteY, midiMin) {
+  const y = Math.max(14, Math.min(height - 14, noteY(pitch.midi)));
+  const close = Math.abs(pitch.cents) <= 35;
 
   ctx.save();
-  ctx.shadowColor = close ? 'rgba(133,255,208,.95)' : 'rgba(255,215,106,.72)';
-  ctx.shadowBlur = 18;
+  ctx.shadowColor = close ? 'rgba(116,247,255,.9)' : 'rgba(255,215,106,.5)';
+  ctx.shadowBlur = 12;
   ctx.fillStyle = close ? '#85ffd0' : '#ffd76a';
   ctx.strokeStyle = '#fff8ff';
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(x, clampedY, 13, 0, Math.PI * 2);
+  ctx.arc(playheadX, y, 10, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 
   ctx.shadowBlur = 0;
-  ctx.fillStyle = '#160d2f';
-  ctx.font = '900 12px Inter, system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('♪', x, clampedY + 1);
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = 'rgba(17,10,39,.82)';
-  roundRect(ctx, labelX, clampedY - 18, 94, 36, 18);
+  const labelX = playheadX + 18;
+  ctx.fillStyle = 'rgba(17,10,39,.84)';
+  roundRect(ctx, labelX, y - 16, 84, 32, 16);
   ctx.fill();
   ctx.strokeStyle = close ? 'rgba(133,255,208,.72)' : 'rgba(255,215,106,.65)';
   ctx.stroke();
   ctx.fillStyle = '#fff8ff';
-  ctx.font = '800 14px Inter, system-ui, sans-serif';
-  ctx.fillText(state.pitch.note, labelX + 14, clampedY - 4);
+  ctx.font = '800 13px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(pitch.note, labelX + 10, y - 3);
   ctx.fillStyle = close ? '#85ffd0' : '#ffd76a';
-  ctx.font = '700 11px Inter, system-ui, sans-serif';
-  ctx.fillText(`${state.pitch.cents > 0 ? '+' : ''}${state.pitch.cents.toFixed(0)}¢`, labelX + 14, clampedY + 10);
+  ctx.font = '700 10px Inter, system-ui, sans-serif';
+  ctx.fillText(`${pitch.cents > 0 ? '+' : ''}${pitch.cents.toFixed(0)}¢`, labelX + 10, y + 10);
   ctx.restore();
 }
 
-function modeLabel(mode) {
-  return mode === 'confirm' ? 'tap' : mode;
-}
-
-function drawNoteNode(x, y, hit, done) {
-  const radius = hit ? 11 : 9;
-  const gradient = ctx.createRadialGradient(x - 3, y - 4, 2, x, y, radius);
+function drawNoteNode(ctx, x, y, hit, done, label) {
+  const r = hit ? 11 : 9;
+  const gradient = ctx.createRadialGradient(x - 2, y - 3, 2, x, y, r);
   gradient.addColorStop(0, '#fff8ff');
-  gradient.addColorStop(0.48, hit ? '#85ffd0' : '#fff0a7');
+  gradient.addColorStop(0.5, hit ? '#85ffd0' : done ? '#9978d2' : '#fff0a7');
   gradient.addColorStop(1, done ? '#66568e' : '#bd8cff');
+  ctx.save();
   ctx.shadowColor = hit ? 'rgba(116,247,255,.9)' : 'rgba(255,215,106,.45)';
-  ctx.shadowBlur = hit ? 14 : 8;
+  ctx.shadowBlur = hit ? 14 : 7;
   ctx.fillStyle = gradient;
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255,248,255,.82)';
+  ctx.strokeStyle = 'rgba(255,248,255,.72)';
   ctx.lineWidth = 2;
   ctx.stroke();
+
+  // Note label above node
+  ctx.fillStyle = done ? 'rgba(189,170,255,.55)' : 'rgba(255,248,255,.88)';
+  ctx.font = '700 10px Inter, system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x, y - r - 3);
+  ctx.restore();
 }
 
-function drawPlayhead(x, height) {
+function drawPlayhead(ctx, x, height) {
+  ctx.save();
   ctx.shadowColor = 'rgba(116,247,255,.9)';
   ctx.shadowBlur = 18;
   ctx.strokeStyle = '#a7f8ff';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(x, 18);
-  ctx.lineTo(x, height - 12);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = '#fff0a7';
-  ctx.strokeStyle = '#fff8ff';
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(x - 2, 24, 13, Math.PI * 0.42, Math.PI * 1.62, false);
-  ctx.arc(x + 5, 24, 10, Math.PI * 1.68, Math.PI * 0.35, true);
+  ctx.moveTo(x, 14);
+  ctx.lineTo(x, height - 10);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // Moon head
+  ctx.fillStyle = '#fff0a7';
+  ctx.strokeStyle = '#fff8ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x - 2, 22, 11, Math.PI * 0.42, Math.PI * 1.62, false);
+  ctx.arc(x + 4, 22, 8, Math.PI * 1.68, Math.PI * 0.35, true);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  drawSparkle(x + 18, 44, 8);
+  drawSparkle(ctx, x + 16, 38, 6);
+  ctx.restore();
 }
 
-function drawSparkle(x, y, size) {
+function drawSparkle(ctx, x, y, size) {
   ctx.save();
   ctx.translate(x, y);
   ctx.fillStyle = '#fff0a7';
   ctx.shadowColor = 'rgba(255,240,167,.8)';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 8;
   ctx.beginPath();
   ctx.moveTo(0, -size);
   ctx.lineTo(size * 0.28, -size * 0.28);
@@ -331,23 +482,34 @@ function drawStars(width, height) {
     [612, 46, 1.5], [744, 238, 1.0], [872, 88, 1.3], [924, 292, 1.0],
   ];
   ctx.fillStyle = 'rgba(255, 240, 167, .72)';
-  for (const [x, y, r] of stars) {
+  for (const [sx, sy, r] of stars) {
     ctx.beginPath();
-    ctx.arc(x % width, y % height, r, 0, Math.PI * 2);
+    ctx.arc(sx % width, sy % height, r, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function rowY(index, rowHeight) {
-  return canvas.height - (index + 0.5) * rowHeight;
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
-function roundRect(context, x, y, width, height, radius) {
-  context.beginPath();
-  context.moveTo(x + radius, y);
-  context.arcTo(x + width, y, x + width, y + height, radius);
-  context.arcTo(x + width, y + height, x, y + height, radius);
-  context.arcTo(x, y + height, x, y, radius);
-  context.arcTo(x, y, x + width, y, radius);
-  context.closePath();
+// ── Debug panel ──────────────────────────────────────────────────────────────
+function updateDebug(dt) {
+  if (debugFrameTime) debugFrameTime.textContent = `${(dt * 1000).toFixed(1)} ms`;
+  if (!audio.ctx) {
+    if (debugAudioLatency) debugAudioLatency.textContent = 'mic off';
+    if (debugFrequency) debugFrequency.textContent = '—';
+    if (debugConfidence) debugConfidence.textContent = '—';
+    return;
+  }
+  const latencyMs = ((audio.ctx.baseLatency ?? 0) + (audio.ctx.outputLatency ?? 0)) * 1000;
+  if (debugAudioLatency) debugAudioLatency.textContent = latencyMs > 0 ? `${latencyMs.toFixed(1)} ms` : 'unknown';
+  if (debugFrequency) debugFrequency.textContent = game.pitch ? `${game.pitch.frequency.toFixed(1)} Hz` : '—';
+  if (debugConfidence) debugConfidence.textContent = game.pitch ? `${Math.round(game.pitch.confidence * 100)}%` : '—';
 }

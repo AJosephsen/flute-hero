@@ -117,3 +117,113 @@ canvas { display: block; width: 100%; height: auto; margin-top: 4px; }
   .mascot { width: 150px; justify-self: start; transform: none; }
   .meters, .debug dl { grid-template-columns: 1fr; }
 }
+
+/* ── Level / song select ──────────────────────────────────────────────────── */
+.levels-screen { display: grid; gap: 24px; margin-bottom: 24px; }
+.levels-header { margin-bottom: 4px; }
+.levels-header h2 { margin: 0 0 4px; font-size: 28px; }
+.muted { color: var(--muted); margin: 0; font-size: 14px; }
+
+.level-card {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--panel), rgba(10,8,28,.78));
+  border-radius: 20px;
+  padding: 20px 22px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.07);
+}
+.level-card.locked { opacity: .5; pointer-events: none; }
+
+.level-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.level-num { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .14em; }
+.level-name { font-weight: 800; font-size: 18px; }
+.level-badge {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--star);
+  background: rgba(255,215,106,.12);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.locked-badge { color: var(--muted); background: rgba(189,140,255,.08); }
+.level-desc { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+
+.song-list { display: grid; gap: 8px; }
+.song-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s, border-color .15s;
+}
+.song-btn:hover:not(:disabled) { background: rgba(189,140,255,.14); border-color: rgba(189,140,255,.4); }
+.song-btn.done { border-color: rgba(255,215,106,.35); background: rgba(255,215,106,.07); }
+.song-btn.locked { opacity: .4; cursor: default; }
+.song-badge { font-size: 18px; width: 24px; text-align: center; }
+.song-title { flex: 1; font-weight: 700; }
+.song-tempo { color: var(--muted); font-size: 12px; }
+
+/* ── Playing screen ───────────────────────────────────────────────────────── */
+.playing-screen { margin-bottom: 12px; }
+.playing-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.playing-title { font-weight: 800; font-size: 17px; flex: 1; }
+.back-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.back-btn:hover { color: var(--ink); border-color: var(--magic); }
+.mic-badge { font-size: 12px; color: var(--glow); }
+
+/* ── Complete screen ──────────────────────────────────────────────────────── */
+.complete-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 0 16px;
+  text-align: center;
+}
+.mascot-celebrate { width: min(160px, 22vw); animation: float 2s ease-in-out infinite; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.complete-screen h2 { font-size: 32px; margin: 0; }
+.complete-song { font-size: 20px; font-weight: 700; margin: 0; color: var(--star); }
+.level-unlocked { color: var(--glow); font-size: 15px; margin: 0; }
+.complete-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.complete-actions button {
+  padding: 11px 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.07);
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+  font: inherit;
+  transition: background .15s;
+}
+.complete-actions button:hover { background: rgba(189,140,255,.2); border-color: var(--magic); }
+.complete-actions button:first-child { background: linear-gradient(135deg, #fff0a7, #8fffe0 58%, #cba0ff); color: #140d2d; border: none; }
