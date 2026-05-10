@@ -1,4 +1,4 @@
-import { detectPitchYin, SOPRANO_RECORDER_BEGINNER, toleranceForMidi } from './pitch.js';
+import { detectPitchYin, SOPRANO_RECORDER_BEGINNER, toleranceForMidi, rms } from './pitch.js';
 import { LEVELS, CONFIRM_SECONDS } from './songs.js';
 import { isSongUnlocked, isLevelUnlocked, isLevelCompleted, isSongCompleted, markSongComplete } from './progress.js';
 
@@ -161,6 +161,25 @@ let activeSongIdx  = 0;
 // ── Audio ─────────────────────────────────────────────────────────────────────
 const audio = { ctx: null, analyser: null, buffer: null };
 
+// ── Pitch smoothing ───────────────────────────────────────────────────────────
+// Require SMOOTH_FRAMES consecutive frames on same MIDI before reporting.
+// Kills single-frame flickers and harmonic octave jumps from real instruments.
+const SMOOTH_FRAMES = 3;
+const smooth = { history: [], stable: null };
+
+function smoothedPitch(raw) {
+  smooth.history.push(raw ? raw.midi : null);
+  if (smooth.history.length > SMOOTH_FRAMES) smooth.history.shift();
+  if (smooth.history.length < SMOOTH_FRAMES) return null;
+  const first = smooth.history[0];
+  if (first === null) { smooth.stable = null; return null; }
+  if (smooth.history.every(m => m === first)) {
+    smooth.stable = raw; return smooth.stable;
+  }
+  return smooth.stable; // mid-transition: hold last stable
+}
+
+
 // ── Game state ────────────────────────────────────────────────────────────────
 const game = {
   pitch:         null,
@@ -205,10 +224,12 @@ async function startMic() {
 }
 
 function updatePitch() {
-  if (!audio.analyser) { game.pitch = null; return; }
+  if (!audio.analyser) { game.pitch = null; smooth.history = []; smooth.stable = null; return; }
   audio.analyser.getFloatTimeDomainData(audio.buffer);
-  const p = detectPitchYin(audio.buffer, audio.ctx.sampleRate, SOPRANO_RECORDER_BEGINNER);
-  game.pitch = (p?.confidence >= 0.68) ? p : null;
+  // Lower confidence gate for real instruments (0.45 vs 0.68 for synth)
+  const raw = detectPitchYin(audio.buffer, audio.ctx.sampleRate, SOPRANO_RECORDER_BEGINNER);
+  const candidate = (raw?.confidence >= 0.45) ? raw : null;
+  game.pitch = smoothedPitch(candidate);
 }
 
 // ── Game logic ────────────────────────────────────────────────────────────────
@@ -763,5 +784,7 @@ function updateDebug(dt) {
   const ms = ((audio.ctx.baseLatency ?? 0) + (audio.ctx.outputLatency ?? 0)) * 1000;
   if (debugAudioLatency) debugAudioLatency.textContent = ms > 0 ? `${ms.toFixed(1)} ms` : 'unknown';
   if (debugFrequency)    debugFrequency.textContent    = game.pitch ? `${game.pitch.frequency.toFixed(1)} Hz` : '—';
-  if (debugConfidence)   debugConfidence.textContent   = game.pitch ? `${Math.round(game.pitch.confidence * 100)}%` : '—';
+  if (debugConfidence)   debugConfidence.textContent   = game.pitch
+    ? `${Math.round(game.pitch.confidence * 100)}% rms:${audio.buffer ? rms(audio.buffer).toFixed(3) : '—'}`
+    : `— rms:${audio.buffer ? rms(audio.buffer).toFixed(3) : '—'}`;
 }

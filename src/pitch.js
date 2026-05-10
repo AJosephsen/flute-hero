@@ -2,11 +2,15 @@ const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A'
 
 export const SOPRANO_RECORDER_BEGINNER = {
   name: 'Soprano recorder beginner',
-  minMidi: 72, // C5
-  maxMidi: 86, // D6
-  minFrequency: midiToFrequency(72) * 2 ** (-80 / 1200),
-  maxFrequency: midiToFrequency(86) * 2 ** (80 / 1200),
-  threshold: 0.2,
+  minMidi: 71, // B4 — just below range so slightly low notes still register
+  maxMidi: 88, // E6 — just above range for the same reason
+  minFrequency: midiToFrequency(71) * 2 ** (-90 / 1200),
+  maxFrequency: midiToFrequency(88) * 2 ** (90 / 1200),
+  // Higher threshold: real recorders rarely get a clean YIN dip below 0.2.
+  // 0.35 lets noisy/breathy tone through; confidence gate in main.js filters junk.
+  threshold: 0.35,
+  // RMS amplitude gate: below this level we skip detection entirely (breath noise, silence)
+  minRms: 0.010,
 };
 
 export function frequencyToMidi(freq) {
@@ -26,24 +30,36 @@ export function centsOff(freq, midi) {
   return 1200 * Math.log2(freq / midiToFrequency(midi));
 }
 
-export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORDER_BEGINNER) {
-  const threshold = profile.threshold ?? 0.12;
-  const minFreq = profile.minFrequency ?? 120;
-  const maxFreq = profile.maxFrequency ?? 1200;
-  const minTau = Math.floor(sampleRate / maxFreq);
-  const maxTau = Math.min(Math.floor(sampleRate / minFreq), floatBuffer.length - 2);
-  const yin = new Float32Array(maxTau + 1);
+export function rms(buffer) {
+  let sum = 0;
+  for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+  return Math.sqrt(sum / buffer.length);
+}
 
+export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORDER_BEGINNER) {
+  // ── Amplitude gate ──────────────────────────────────────────────────────────
+  const minRms = profile.minRms ?? 0.008;
+  if (rms(floatBuffer) < minRms) return null;
+
+  const threshold = profile.threshold ?? 0.30;
+  const minFreq   = profile.minFrequency;
+  const maxFreq   = profile.maxFrequency;
+  const minTau    = Math.max(2, Math.floor(sampleRate / maxFreq));
+  const maxTau    = Math.min(Math.floor(sampleRate / minFreq), floatBuffer.length - 2);
+  const yin       = new Float32Array(maxTau + 1);
+
+  // ── Difference function ─────────────────────────────────────────────────────
   for (let tau = minTau; tau <= maxTau; tau++) {
     let sum = 0;
     const limit = floatBuffer.length - tau;
     for (let i = 0; i < limit; i++) {
-      const delta = floatBuffer[i] - floatBuffer[i + tau];
-      sum += delta * delta;
+      const d = floatBuffer[i] - floatBuffer[i + tau];
+      sum += d * d;
     }
     yin[tau] = sum;
   }
 
+  // ── Cumulative mean normalised difference ───────────────────────────────────
   let running = 0;
   yin[0] = 1;
   for (let tau = minTau; tau <= maxTau; tau++) {
@@ -51,6 +67,8 @@ export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORD
     yin[tau] = yin[tau] * tau / Math.max(running, 1e-9);
   }
 
+  // ── Find first dip below threshold ─────────────────────────────────────────
+  // Walk to local minimum once we cross the threshold, then stop
   let tauEstimate = -1;
   for (let tau = minTau; tau <= maxTau; tau++) {
     if (yin[tau] < threshold) {
@@ -59,38 +77,35 @@ export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORD
       break;
     }
   }
-
   if (tauEstimate < 0) return null;
 
+  // ── Parabolic interpolation for sub-sample accuracy ────────────────────────
   const betterTau = parabolicInterpolate(yin, tauEstimate);
   const frequency = sampleRate / betterTau;
-  const midi = frequencyToMidi(frequency);
-  if (profile.minMidi != null && profile.maxMidi != null && (midi < profile.minMidi || midi > profile.maxMidi)) {
-    return null;
-  }
+  const midi      = frequencyToMidi(frequency);
+
+  // Clamp to declared MIDI range, but use the wider minMidi/maxMidi here
+  if (profile.minMidi != null && midi < profile.minMidi) return null;
+  if (profile.maxMidi != null && midi > profile.maxMidi) return null;
 
   const confidence = Math.max(0, Math.min(1, 1 - yin[tauEstimate]));
 
-  return {
-    frequency,
-    midi,
-    note: midiToName(midi),
-    cents: centsOff(frequency, midi),
-    confidence,
-  };
+  return { frequency, midi, note: midiToName(midi), cents: centsOff(frequency, midi), confidence };
 }
 
 export function toleranceForMidi(midi) {
-  // Lower beginner recorder notes speak less cleanly; give them a slightly wider gate.
-  if (midi <= 74) return 75; // C5-D5
-  if (midi <= 79) return 65; // E5-G5
-  return 55; // A5-D6
+  // Generous cents tolerance for a live beginner player.
+  // Lower register notes need more room — they speak less cleanly and pitch
+  // tends to sit flat.
+  if (midi <= 74) return 95;  // C5–D5  (hardest fingerings)
+  if (midi <= 79) return 80;  // E5–G5
+  return 70;                  // A5–D6 / upper range
 }
 
 function parabolicInterpolate(values, tau) {
-  const left = values[tau - 1] ?? values[tau];
-  const center = values[tau];
-  const right = values[tau + 1] ?? values[tau];
+  const left    = values[tau - 1] ?? values[tau];
+  const center  = values[tau];
+  const right   = values[tau + 1] ?? values[tau];
   const divisor = 2 * (2 * center - right - left);
   if (Math.abs(divisor) < 1e-9) return tau;
   return tau + (right - left) / divisor;
