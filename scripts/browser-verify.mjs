@@ -51,7 +51,7 @@ await page.addInitScript(() => {
     const osc   = audio.createOscillator();
     const gain  = audio.createGain();
     const dest  = audio.createMediaStreamDestination();
-    osc.type = 'sine'; osc.frequency.value = 880;
+    osc.type = 'sine'; osc.frequency.value = 440; // A4 — inside C4-D5 range
     gain.gain.value = 0.3;
     osc.connect(gain).connect(dest);
     osc.start();
@@ -121,7 +121,7 @@ try {
   await page.screenshot({ path: '/tmp/fh-04-playing-pitch.png' });
 
   const detected = await page.textContent('#detectedNote').catch(() => '');
-  check('Playing: pitch detected (A5 from synth mic)', detected.includes('A5'), detected);
+  check('Playing: pitch detected (A4 from synth mic)', detected.includes('A4'), detected);
 
   // ── 5. Debug panel ───────────────────────────────────────────────────────────
   const frameTime = await page.textContent('#debugFrameTime').catch(() => '');

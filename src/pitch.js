@@ -1,13 +1,13 @@
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
 
 export const SOPRANO_RECORDER_BEGINNER = {
-  name: 'Soprano recorder beginner',
-  minMidi: 71, // B4 — slight buffer below range
-  maxMidi: 88, // E6 — slight buffer above range
-  minFrequency: midiToFrequency(71) * 2 ** (-90 / 1200),
-  maxFrequency: midiToFrequency(88) * 2 ** (90 / 1200),
-  threshold: 0.35,  // real recorders rarely dip below 0.2 in CMNDF
-  minRms: 0.010,    // amplitude gate — ignore breath / silence
+  name: 'Concert flute / C flute',
+  minMidi: 59, // B3 — buffer below C4
+  maxMidi: 76, // E5 — buffer above D5
+  minFrequency: midiToFrequency(59) * 2 ** (-90 / 1200),
+  maxFrequency: midiToFrequency(76) * 2 ** (90 / 1200),
+  threshold: 0.35,
+  minRms: 0.010,
 };
 
 export function frequencyToMidi(freq) {
@@ -136,9 +136,9 @@ export function detectPitchYin(floatBuffer, sampleRate, profile = SOPRANO_RECORD
 }
 
 export function toleranceForMidi(midi) {
-  if (midi <= 74) return 95;  // C5–D5
-  if (midi <= 79) return 80;  // E5–G5
-  return 70;                  // A5 and above
+  if (midi <= 62) return 95;  // C4–D4 (lowest, hardest to centre)
+  if (midi <= 67) return 85;  // E4–G4
+  return 75;                  // A4 and above
 }
 
 function parabolicInterpolate(values, tau) {

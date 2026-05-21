@@ -512,13 +512,13 @@ function buildCompleteScreen() {
 //   Bottom line (line 1) = E4 = midi 64
 //   Each staff slot (half-step) = lineSpacing/2 px
 //   Lines are at midi 64,67,71,74,77 (E4,G4,B4,D5,F5)
-//   Our notes C5(72)–D6(86) sit above line 4, with up to 3 ledger lines above
+//   Our notes C4(60)–D5(74) sit on/around lines 1–4, with ledger lines below for C4/D4
 
 // Staff geometry — computed once per frame from canvas size
 function staffGeometry(W, H) {
   const lineSpacing = Math.min(H * 0.085, 38); // space between staff lines
   const staffHeight = lineSpacing * 4;          // 5 lines = 4 gaps
-  const staffCentreY = H * 0.62;               // push staff down — notes above staff get room
+  const staffCentreY = H * 0.50;               // C4-D5 sits on the staff itself, centre it
   const staffTop    = staffCentreY - staffHeight / 2;
   const staffBottom = staffCentreY + staffHeight / 2;
 
@@ -658,30 +658,24 @@ function drawStaff(W, lineYs) {
 
 // ── Ledger lines ──────────────────────────────────────────────────────────────
 function drawLedgerLines(ctx, x, midi, noteY, lineYs, lineSpacing, headW, hit, done) {
-  // Staff lines are at midis 64,67,71,74,77; our notes start at 72.
-  // Ledger lines needed above F5 (midi 77):
-  //   midi 79 (G5) — space, no ledger
-  //   midi 81 (A5) — first ledger line above
-  //   midi 83 (B5) — space above first ledger
-  //   midi 84 (C6) — second ledger line
-  //   midi 86 (D6) — space above second ledger
-  const ledgerMidis = [81, 84]; // A5, C6
-  const lw = headW * 2.4;
+  // Staff lines at E4(64),G4(67),B4(71),D5(74),F5(77).
+  // Our range C4(60)–D5(74):
+  //   C4(60) — below staff, needs ledger line at C4
+  //   D4(62) — space below first ledger (no line needed, just space)
+  //   E4(64) — bottom staff line, no ledger
+  //   D5(74) — top used line (line 4)
+  // Ledger lines needed: C4(60) is ON a ledger line below the staff.
+  // The C4 ledger sits one step below E4 line.
+  const ledgerMidis = [60]; // C4 — middle C ledger line below staff
+  const lw = headW * 2.6;
   ctx.save();
   ctx.strokeStyle = hit  ? 'rgba(180,120,0,0.8)'
                   : done ? 'rgba(60,40,20,0.25)'
                   :        'rgba(60,40,20,0.55)';
   ctx.lineWidth = 1.2;
   for (const lm of ledgerMidis) {
-    if (midi >= lm - 0 && midi <= lm + 1) { // note sits on or in space of this ledger
-      // draw if note is at or above this pitch
-      const ly = noteY(lm);
-      ctx.beginPath(); ctx.moveTo(x - lw/2, ly); ctx.lineTo(x + lw/2, ly); ctx.stroke();
-    }
-  }
-  // Also draw ALL lower ledger lines when note is high
-  for (const lm of ledgerMidis) {
-    if (midi > lm) {
+    // Draw this ledger line if the note is at or below this midi
+    if (midi <= lm + 1) {
       const ly = noteY(lm);
       ctx.beginPath(); ctx.moveTo(x - lw/2, ly); ctx.lineTo(x + lw/2, ly); ctx.stroke();
     }
