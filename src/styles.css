@@ -80,7 +80,7 @@ button { font: inherit; cursor: pointer; }
   position: fixed;
   inset: 0;
   z-index: 10;
-  background: #09071a;
+  background: #f4ecd4; /* parchment fallback while canvas paints */
 }
 .lane-shell.active { display: block; }
 

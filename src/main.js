@@ -82,11 +82,9 @@ function streakMultiplier() {
 
 // ── Note-Y helper (accessible outside render for scoring) ─────────────────────
 function noteYCSS(midi) {
-  const MIDI_MIN = 72, MIDI_MAX = 86;
-  const H          = laneShell.clientHeight;
-  const laneTop    = H * 0.10;
-  const laneBottom = H * 0.88;
-  return laneBottom - ((midi - MIDI_MIN) / (MIDI_MAX - MIDI_MIN)) * (laneBottom - laneTop);
+  const H  = laneShell.clientHeight;
+  const sg = staffGeometry(laneShell.clientWidth, H);
+  return sg.noteY(midi);
 }
 
 // ── Particle colours ──────────────────────────────────────────────────────────
@@ -501,90 +499,442 @@ function buildCompleteScreen() {
 }
 
 // ── Canvas render ─────────────────────────────────────────────────────────────
+//
+// Sheet music aesthetic:
+//   - Parchment/cream paper background
+//   - Real 5-line G staff centred in the canvas
+//   - Notes positioned by standard treble-clef staff position (E4 = bottom line)
+//   - Note heads: filled oval (quarter/eighth), open oval (half), open large (whole)
+//   - Stems, flags (eighth), beams (consecutive eighths), ledger lines
+//   - Hit state: gold fill + burn particles still fly
+//
+// Staff layout (treble clef, our range C5–D6):
+//   Bottom line (line 1) = E4 = midi 64
+//   Each staff slot (half-step) = lineSpacing/2 px
+//   Lines are at midi 64,67,71,74,77 (E4,G4,B4,D5,F5)
+//   Our notes C5(72)–D6(86) sit above line 4, with up to 3 ledger lines above
+
+// Staff geometry — computed once per frame from canvas size
+function staffGeometry(W, H) {
+  const lineSpacing = Math.min(H * 0.085, 38); // space between staff lines
+  const staffHeight = lineSpacing * 4;          // 5 lines = 4 gaps
+  const staffCentreY = H * 0.62;               // push staff down — notes above staff get room
+  const staffTop    = staffCentreY - staffHeight / 2;
+  const staffBottom = staffCentreY + staffHeight / 2;
+
+  // midi → Y: E4 (midi 64) = staffBottom, each half-step = lineSpacing/2 up
+  // slot = (midi - 64) in chromatic half-steps; but staff positions are diatonic
+  // We map by diatonic step: C D E F G A B = 0 1 2 3 4 5 6 within octave
+  // Diatonic steps above E4 baseline:
+  //   E4=0, F4=1, G4=2, A4=3, B4=4, C5=5, D5=6, E5=7, F5=8, G5=9, A5=10, B5=11, C6=12, D6=13
+
+  const DIATONIC_STEP = lineSpacing / 2; // half a line-space per diatonic step
+
+  // Chromatic midi → diatonic steps above E4
+  function midiToDiatonicSteps(midi) {
+    const C_DIATONIC = [0,0,1,1,2,3,3,4,4,5,5,6]; // C=0,D=1,E=2,F=3,G=4,A=5,B=6
+    const octave = Math.floor(midi / 12) - 1;
+    const pc     = midi % 12;
+    const eOctave = 4; // E4 is our zero
+    const ePc     = 4; // E = pc 4
+    // diatonic steps from E4
+    // steps within octave from E: E=0,F=1,G=2,A=3,B=4
+    // then next octave: C=5,D=6,E=7…
+    const STEPS_FROM_E = [5,5,6,6,0,1,1,2,2,3,3,4]; // pc 0(C)=5 steps above E same octave
+    const stepsInOctave = STEPS_FROM_E[pc];
+    const octaveDiff = octave - eOctave;
+    return octaveDiff * 7 + stepsInOctave;
+  }
+
+  function noteY(midi) {
+    const steps = midiToDiatonicSteps(midi);
+    return staffBottom - steps * DIATONIC_STEP;
+  }
+
+  // Staff line Y positions (E4,G4,B4,D5,F5)
+  const lineYs = [64, 67, 71, 74, 77].map(noteY);
+
+  return { lineSpacing, staffTop, staffBottom, staffCentreY, noteY, lineYs, DIATONIC_STEP, midiToDiatonicSteps };
+}
+
 function renderCanvas() {
   const W = laneShell.clientWidth;
   const H = laneShell.clientHeight;
   ctx.clearRect(0, 0, W, H);
-  drawStars(W, H);
+
+  // ── Parchment background ──────────────────────────────────────────────────
+  drawParchment(W, H);
+
   if (screen !== 'playing' && screen !== 'complete') return;
 
-  const notes      = game.song.notes;
-  const SPEED      = W * 0.14;
-  const playheadX  = W * 0.22;
-  const MIDI_MIN   = 72, MIDI_MAX = 86;
-  const MIDI_RANGE = MIDI_MAX - MIDI_MIN;
-  const laneTop    = H * 0.10;
-  const laneBottom = H * 0.88;
-  const laneH      = laneBottom - laneTop;
-  const t          = performance.now() / 1000;
+  const notes     = game.song.notes;
+  const beat      = 60 / game.song.tempo;
+  const SPEED     = W * 0.14;
+  const playheadX = W * 0.22;
+  const t         = performance.now() / 1000;
 
-  function noteY(midi) {
-    return laneBottom - ((midi - MIDI_MIN) / MIDI_RANGE) * laneH;
-  }
+  const sg = staffGeometry(W, H);
+  const { lineSpacing, staffBottom, noteY, lineYs } = sg;
+  const headW = lineSpacing * 0.62; // note head semi-axis horizontal
+  const headH = lineSpacing * 0.42; // note head semi-axis vertical
 
-  // Subtle lane lines
-  ctx.save();
-  ctx.strokeStyle = 'rgba(189,140,255,.07)';
-  ctx.lineWidth   = 1;
-  for (let midi = MIDI_MIN; midi <= MIDI_MAX; midi++) {
-    const y = noteY(midi);
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-  ctx.restore();
+  // ── Staff lines ───────────────────────────────────────────────────────────
+  drawStaff(W, lineYs);
 
-  // Notes
+  // ── Clef watermark just left of playhead ─────────────────────────────────
+  drawTrebleClef(ctx, playheadX - lineSpacing * 1.8, lineYs, lineSpacing);
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
   const cur = currentNote(game.songTime, notes);
+
+  // Group adjacent eighth notes for beaming
+  const beamGroups = computeBeamGroups(notes, beat);
+
   for (const note of notes) {
     const noteX    = playheadX + (note.start - game.songTime) * SPEED;
     const noteEndX = playheadX + (note.start + note.duration - game.songTime) * SPEED;
-    if (noteEndX < -60 || noteX > W + 60) continue;
+    if (noteEndX < -80 || noteX > W + 80) continue;
 
-    const y         = noteY(note.midi);
-    const done      = game.completed.has(note.start) || scoring.awardedNotes.has(note.start);
-    const isActive  = cur === note;
-    const hit       = isActive && isHit(note);
-    const holdSecs  = game.heldCorrectFor.get(note.start) ?? 0;
+    const y        = noteY(note.midi);
+    const done     = game.completed.has(note.start) || scoring.awardedNotes.has(note.start);
+    const isActive = cur === note;
+    const hit      = isActive && isHit(note);
+    const holdSecs = game.heldCorrectFor.get(note.start) ?? 0;
 
-    // Bar
-    const barX = Math.max(0, noteX);
-    const barW = noteEndX - barX;
-    if (barW > 2) {
-      ctx.save();
-      ctx.fillStyle = done
-        ? 'rgba(102,86,142,.38)'
-        : hit ? 'rgba(133,255,208,.22)' : 'rgba(189,140,255,.14)';
-      roundRect(ctx, barX, y - 9, barW, 18, 9);
-      ctx.fill();
-      // Burning bar highlight while hitting
-      if (hit) {
-        const gBar = ctx.createLinearGradient(barX, 0, barX + barW, 0);
-        gBar.addColorStop(0, 'rgba(255,180,30,.5)');
-        gBar.addColorStop(1, 'rgba(133,255,208,.1)');
-        ctx.fillStyle = gBar;
-        ctx.fill();
-      }
-      ctx.restore();
-    }
+    const beatsLen   = note.duration / beat;
+    const noteType   = noteTypeFromBeats(beatsLen);
+    const stemUp     = sg.midiToDiatonicSteps(note.midi) < 5; // below middle B4 → stem up
+    const beamGroup  = beamGroups.get(note.start);
 
-    // Burn effect under node
+    // Burn effect behind note
     if (hit) {
-      const burnIntensity = Math.min(1, 0.35 + holdSecs * 1.8);
+      const burnIntensity = Math.min(1, 0.3 + holdSecs * 1.6);
       drawBurn(ctx, noteX, y, t, burnIntensity);
     }
 
-    // Node
-    if (noteX > -30 && noteX < W + 30) {
-      drawNoteNode(ctx, noteX, y, hit, done, note.note, W, t, holdSecs);
+    // Ledger lines
+    drawLedgerLines(ctx, noteX, note.midi, noteY, lineYs, lineSpacing, headW, hit, done);
+
+    // Note glyph
+    drawSheetNote(ctx, noteX, y, noteType, stemUp, hit, done, headW, headH, lineSpacing, beamGroup, notes, noteY, SPEED, game.songTime, playheadX, beat, t);
+  }
+
+  // ── Playhead ──────────────────────────────────────────────────────────────
+  drawPlayhead(ctx, playheadX, H, lineYs, t);
+
+  // ── Live pitch cursor ─────────────────────────────────────────────────────
+  if (game.pitch) drawPitchCursor(ctx, game.pitch, playheadX, H, noteY, lineYs, lineSpacing, headW, headH, W);
+
+  // ── Particles & floats ────────────────────────────────────────────────────
+  drawParticles(ctx);
+  drawFloats(ctx, W);
+}
+
+// ── Parchment background ───────────────────────────────────────────────────────
+function drawParchment(W, H) {
+  // Warm cream base
+  const bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0,   '#f8f2e2');
+  bg.addColorStop(0.5, '#f4ecd4');
+  bg.addColorStop(1,   '#efe5c4');
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle vignette at edges
+  const vig = ctx.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.9);
+  vig.addColorStop(0, 'rgba(120,90,40,0)');
+  vig.addColorStop(1, 'rgba(100,70,20,0.18)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ── Staff 5 lines ──────────────────────────────────────────────────────────────
+function drawStaff(W, lineYs) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(60,40,20,0.55)';
+  ctx.lineWidth   = 1.2;
+  for (const y of lineYs) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Ledger lines ──────────────────────────────────────────────────────────────
+function drawLedgerLines(ctx, x, midi, noteY, lineYs, lineSpacing, headW, hit, done) {
+  // Staff lines are at midis 64,67,71,74,77; our notes start at 72.
+  // Ledger lines needed above F5 (midi 77):
+  //   midi 79 (G5) — space, no ledger
+  //   midi 81 (A5) — first ledger line above
+  //   midi 83 (B5) — space above first ledger
+  //   midi 84 (C6) — second ledger line
+  //   midi 86 (D6) — space above second ledger
+  const ledgerMidis = [81, 84]; // A5, C6
+  const lw = headW * 2.4;
+  ctx.save();
+  ctx.strokeStyle = hit  ? 'rgba(180,120,0,0.8)'
+                  : done ? 'rgba(60,40,20,0.25)'
+                  :        'rgba(60,40,20,0.55)';
+  ctx.lineWidth = 1.2;
+  for (const lm of ledgerMidis) {
+    if (midi >= lm - 0 && midi <= lm + 1) { // note sits on or in space of this ledger
+      // draw if note is at or above this pitch
+      const ly = noteY(lm);
+      ctx.beginPath(); ctx.moveTo(x - lw/2, ly); ctx.lineTo(x + lw/2, ly); ctx.stroke();
+    }
+  }
+  // Also draw ALL lower ledger lines when note is high
+  for (const lm of ledgerMidis) {
+    if (midi > lm) {
+      const ly = noteY(lm);
+      ctx.beginPath(); ctx.moveTo(x - lw/2, ly); ctx.lineTo(x + lw/2, ly); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// ── Note type from beat length ─────────────────────────────────────────────────
+function noteTypeFromBeats(beats) {
+  if (beats >= 3.5)  return 'whole';
+  if (beats >= 1.75) return 'half';
+  if (beats >= 0.85) return 'quarter';
+  return 'eighth';
+}
+
+// ── Beam groups: which consecutive eighth notes should be beamed ──────────────
+function computeBeamGroups(notes, beat) {
+  // Returns a Map: note.start → { first: bool, last: bool, partnerX-offset (not yet known) }
+  const groups = new Map();
+  const eighths = notes.filter(n => noteTypeFromBeats(n.duration / beat) === 'eighth');
+  let i = 0;
+  while (i < eighths.length) {
+    // Beam runs of 2 consecutive eighth notes
+    const a = eighths[i];
+    const b = eighths[i + 1];
+    if (b && Math.abs((a.start + a.duration) - b.start) < 0.06) {
+      groups.set(a.start, { role: 'first',  partner: b.start });
+      groups.set(b.start, { role: 'second', partner: a.start });
+      i += 2;
+    } else {
+      groups.set(a.start, { role: 'solo' });
+      i++;
+    }
+  }
+  return groups;
+}
+
+// ── Draw a single notated note ────────────────────────────────────────────────
+function drawSheetNote(ctx, x, y, noteType, stemUp, hit, done, headW, headH, lineSpacing, beamGroup, notes, noteY, SPEED, songTime, playheadX, beat, t) {
+
+  const stemLen   = lineSpacing * 3.2;
+  const stemDir   = stemUp ? -1 : 1;
+  const stemX     = stemUp ? x + headW * 0.82 : x - headW * 0.82;
+  const stemTipY  = y + stemDir * stemLen;
+
+  // colours
+  const inkColor   = done ? 'rgba(60,40,20,0.28)'
+                   : hit  ? '#7a4a00'
+                   :         'rgba(40,25,10,0.88)';
+  const fillColor  = hit  ? '#d4900a'
+                   : done ? 'rgba(180,150,100,0.3)'
+                   :        inkColor;
+  const openFill   = hit  ? 'rgba(255,210,80,0.18)' : 'rgba(248,242,226,0.0)'; // transparent centre for half/whole
+
+  ctx.save();
+
+  // ── Note head ──────────────────────────────────────────────────────────────
+  ctx.beginPath();
+  ctx.ellipse(x, y, headW, headH, -0.22, 0, Math.PI * 2);
+
+  if (noteType === 'whole' || noteType === 'half') {
+    // Open note head
+    ctx.strokeStyle = fillColor;
+    ctx.lineWidth   = headH * 0.55;
+    ctx.stroke();
+    ctx.fillStyle   = hit ? 'rgba(255,210,80,0.25)' : 'rgba(248,242,226,1)';
+    ctx.fill();
+  } else {
+    // Filled note head
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+  }
+
+  // Hit glow ring
+  if (hit) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,160,0,0.9)';
+    ctx.shadowBlur  = 18;
+    ctx.strokeStyle = 'rgba(255,200,60,0.8)';
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, y, headW + 4, headH + 4, -0.22, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ── Stem (not for whole notes) ─────────────────────────────────────────────
+  if (noteType !== 'whole') {
+    ctx.strokeStyle = fillColor;
+    ctx.lineWidth   = Math.max(1.2, headH * 0.45);
+    ctx.lineCap     = 'round';
+    ctx.beginPath();
+    ctx.moveTo(stemX, y);
+    ctx.lineTo(stemX, stemTipY);
+    ctx.stroke();
+  }
+
+  // ── Flag (solo eighth note — single flag on stem tip) ─────────────────────
+  if (noteType === 'eighth' && (!beamGroup || beamGroup.role === 'solo')) {
+    drawFlag(ctx, stemX, stemTipY, stemUp, fillColor, lineSpacing);
+  }
+
+  // ── Beam (eighth note pair) ────────────────────────────────────────────────
+  // Only draw beam from the FIRST note of the pair, to the partner's stem tip
+  if (noteType === 'eighth' && beamGroup && beamGroup.role === 'first') {
+    const partnerNote = notes.find(n => n.start === beamGroup.partner);
+    if (partnerNote) {
+      const px2   = playheadX + (partnerNote.start - songTime) * SPEED;
+      const py2   = noteY(partnerNote.midi);
+      const sx2   = stemUp ? px2 + headW * 0.82 : px2 - headW * 0.82;
+      const sty2  = py2 + stemDir * (lineSpacing * 3.2);
+      // Beam: thick horizontal bar connecting the two stem tips
+      const beamH = lineSpacing * 0.38;
+      ctx.fillStyle = fillColor;
+      ctx.beginPath();
+      if (stemUp) {
+        ctx.moveTo(stemX,  stemTipY - beamH/2);
+        ctx.lineTo(sx2,    sty2     - beamH/2);
+        ctx.lineTo(sx2,    sty2     + beamH/2);
+        ctx.lineTo(stemX,  stemTipY + beamH/2);
+      } else {
+        ctx.moveTo(stemX,  stemTipY - beamH/2);
+        ctx.lineTo(sx2,    sty2     - beamH/2);
+        ctx.lineTo(sx2,    sty2     + beamH/2);
+        ctx.lineTo(stemX,  stemTipY + beamH/2);
+      }
+      ctx.closePath();
+      ctx.fill();
     }
   }
 
-  drawPlayhead(ctx, playheadX, H, t);
+  ctx.restore();
+}
 
-  if (game.pitch) drawPitchIndicator(ctx, game.pitch, playheadX, H, noteY, W);
+// ── Eighth note flag ───────────────────────────────────────────────────────────
+function drawFlag(ctx, sx, sy, stemUp, color, lineSpacing) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth   = Math.max(1.2, lineSpacing * 0.12);
+  ctx.lineCap     = 'round';
+  const dir = stemUp ? 1 : -1;
+  const cp1x = sx + lineSpacing * 0.7 * dir;
+  const cp1y = sy + lineSpacing * 0.5;
+  const cp2x = sx + lineSpacing * 0.65 * dir;
+  const cp2y = sy + lineSpacing * 1.1;
+  const ex   = sx + lineSpacing * 0.15 * dir;
+  const ey   = sy + lineSpacing * (stemUp ? 1.4 : -0.5);
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, ex, ey);
+  ctx.stroke();
+  ctx.restore();
+}
 
-  // Particles & floats
-  drawParticles(ctx);
-  drawFloats(ctx, W);
+// ── Treble clef watermark ─────────────────────────────────────────────────────
+function drawTrebleClef(ctx, x, lineYs, lineSpacing) {
+  // Minimal symbolic treble clef drawn with bezier curves
+  // Based on the G-clef curling around the G4 line (lineYs[1])
+  const g4y  = lineYs[1]; // G4 line
+  const e4y  = lineYs[0]; // E4 line (bottom)
+  const f5y  = lineYs[4]; // F5 line (top)
+  const size = lineSpacing * 0.72;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(60,40,20,0.30)';
+  ctx.fillStyle   = 'rgba(60,40,20,0.30)';
+  ctx.lineWidth   = lineSpacing * 0.13;
+  ctx.lineCap     = 'round';
+  ctx.lineJoin    = 'round';
+
+  // Vertical spine
+  ctx.beginPath();
+  ctx.moveTo(x, f5y - lineSpacing * 1.2);
+  ctx.bezierCurveTo(
+    x + size * 0.1, f5y - lineSpacing * 0.5,
+    x + size * 0.1, e4y + lineSpacing * 0.3,
+    x - size * 0.1, e4y + lineSpacing * 0.7
+  );
+  ctx.stroke();
+
+  // Curl around G4
+  ctx.beginPath();
+  ctx.arc(x + size * 0.04, g4y, size * 0.42, -Math.PI * 0.1, Math.PI * 1.85);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+// ── Playhead — clean vertical red line like a conductor mark ─────────────────
+function drawPlayhead(ctx, x, H, lineYs, t) {
+  const staffTop    = lineYs[4] - 8;
+  const staffBottom = lineYs[0] + 8;
+
+  // Faint full-height guide
+  ctx.save();
+  ctx.strokeStyle = 'rgba(200,80,40,0.10)';
+  ctx.lineWidth   = 1;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Bold red line over the staff
+  ctx.shadowColor = 'rgba(220,60,20,0.55)';
+  ctx.shadowBlur  = 8;
+  ctx.strokeStyle = 'rgba(210,50,20,0.82)';
+  ctx.lineWidth   = 2.2;
+  ctx.lineCap     = 'round';
+  ctx.beginPath(); ctx.moveTo(x, staffTop); ctx.lineTo(x, staffBottom); ctx.stroke();
+
+  // Triangle pointer at top
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(210,50,20,0.82)';
+  ctx.beginPath();
+  ctx.moveTo(x,     staffTop - 2);
+  ctx.lineTo(x - 6, staffTop - 12);
+  ctx.lineTo(x + 6, staffTop - 12);
+  ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+}
+
+// ── Live pitch cursor ─────────────────────────────────────────────────────────
+// Ghost note head following the live detected pitch
+function drawPitchCursor(ctx, pitch, playheadX, H, noteY, lineYs, lineSpacing, headW, headH, W) {
+  const y     = noteY(pitch.midi);
+  const close = Math.abs(pitch.cents) <= 35;
+
+  if (y < -40 || y > H + 40) return;
+
+  // Ghost note head
+  ctx.save();
+  ctx.globalAlpha = 0.65;
+  ctx.shadowColor = close ? 'rgba(30,160,80,0.8)' : 'rgba(180,100,0,0.7)';
+  ctx.shadowBlur  = 14;
+  ctx.fillStyle   = close ? 'rgba(40,200,100,0.82)' : 'rgba(200,130,20,0.72)';
+  ctx.beginPath();
+  ctx.ellipse(playheadX, y, headW * 1.1, headH * 1.1, -0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cents deviation label
+  ctx.globalAlpha = 0.88;
+  ctx.shadowBlur  = 0;
+  ctx.fillStyle   = close ? '#1a6030' : '#7a4000';
+  ctx.font        = `700 ${Math.max(11, Math.round(W * 0.012))}px Inter, system-ui, sans-serif`;
+  ctx.textAlign   = 'left';
+  ctx.fillText(
+    `${pitch.note} ${pitch.cents > 0 ? '+' : ''}${pitch.cents.toFixed(0)}¢`,
+    playheadX + headW * 1.4, y + 4
+  );
+  ctx.restore();
 }
 
 // ── Burn effect ───────────────────────────────────────────────────────────────
@@ -595,100 +945,23 @@ function drawBurn(ctx, x, y, t, intensity) {
     const base    = (i / n) * Math.PI * 2;
     const angle   = base + t * 2.8 + Math.sin(t * 5.1 + i * 1.9) * 0.4;
     const flicker = 0.6 + 0.4 * Math.sin(t * 9.3 + i * 2.3);
-    const len     = (20 + 16 * flicker) * intensity;
+    const len     = (18 + 14 * flicker) * intensity;
     const ex      = x + Math.cos(angle) * len;
     const ey      = y + Math.sin(angle) * len;
-
     const g = ctx.createLinearGradient(x, y, ex, ey);
-    g.addColorStop(0,    `rgba(255,255,180,${0.95 * intensity})`);
-    g.addColorStop(0.38, `rgba(255,140,20,${0.80 * intensity})`);
+    g.addColorStop(0,    `rgba(255,255,180,${0.9 * intensity})`);
+    g.addColorStop(0.38, `rgba(255,140,20,${0.75 * intensity})`);
     g.addColorStop(1,    'rgba(255,40,0,0)');
-
     const cx1 = x + Math.cos(angle + 0.55) * len * 0.48;
     const cy1 = y + Math.sin(angle + 0.55) * len * 0.48;
-
     ctx.strokeStyle = g;
-    ctx.lineWidth   = (3 + 2 * flicker) * intensity;
+    ctx.lineWidth   = (2.5 + 2 * flicker) * intensity;
     ctx.lineCap     = 'round';
-    ctx.shadowColor = 'rgba(255,110,0,.75)';
-    ctx.shadowBlur  = 14 * intensity;
+    ctx.shadowColor = 'rgba(255,110,0,.7)';
+    ctx.shadowBlur  = 12 * intensity;
     ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.quadraticCurveTo(cx1, cy1, ex, ey);
-    ctx.stroke();
+    ctx.moveTo(x, y); ctx.quadraticCurveTo(cx1, cy1, ex, ey); ctx.stroke();
   }
-  ctx.restore();
-}
-
-// ── Note node ─────────────────────────────────────────────────────────────────
-function drawNoteNode(ctx, x, y, hit, done, label, W, t, holdSecs) {
-  const r = hit ? 13 : 10;
-
-  // Extra pulse ring while burning
-  if (hit) {
-    const pulseR = r + 6 + 4 * Math.sin(t * 9);
-    ctx.save();
-    ctx.strokeStyle = `rgba(255,200,50,${0.3 + 0.2 * Math.sin(t * 7)})`;
-    ctx.lineWidth   = 2;
-    ctx.shadowColor = 'rgba(255,150,0,.6)';
-    ctx.shadowBlur  = 12;
-    ctx.beginPath(); ctx.arc(x, y, pulseR, 0, Math.PI * 2); ctx.stroke();
-    ctx.restore();
-  }
-
-  const g = ctx.createRadialGradient(x - 2, y - 3, 2, x, y, r);
-  if (hit) {
-    g.addColorStop(0,   '#ffffff');
-    g.addColorStop(0.3, '#85ffd0');
-    g.addColorStop(0.8, '#00c8a0');
-    g.addColorStop(1,   '#009070');
-  } else if (done) {
-    g.addColorStop(0, '#c8b4ff');
-    g.addColorStop(1, '#66568e');
-  } else {
-    g.addColorStop(0, '#fff8ff');
-    g.addColorStop(0.5, '#fff0a7');
-    g.addColorStop(1,   '#bd8cff');
-  }
-
-  ctx.save();
-  ctx.shadowColor = hit ? 'rgba(116,247,255,.95)' : done ? 'rgba(189,140,255,.3)' : 'rgba(255,215,106,.45)';
-  ctx.shadowBlur  = hit ? 22 : 8;
-  ctx.fillStyle   = g;
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur  = 0;
-  ctx.strokeStyle = hit ? 'rgba(200,255,240,.9)' : 'rgba(255,248,255,.65)';
-  ctx.lineWidth   = 2;
-  ctx.stroke();
-  ctx.fillStyle   = done ? 'rgba(189,170,255,.5)' : hit ? 'rgba(0,40,30,.9)' : 'rgba(255,248,255,.9)';
-  ctx.font        = `700 ${Math.round(W * 0.012)}px Inter, system-ui, sans-serif`;
-  ctx.textAlign   = 'center';
-  ctx.fillText(label, x, y - r - 4);
-  ctx.restore();
-}
-
-// ── Pitch indicator ───────────────────────────────────────────────────────────
-function drawPitchIndicator(ctx, pitch, playheadX, H, noteY, W) {
-  const y     = Math.max(18, Math.min(H - 18, noteY(pitch.midi)));
-  const close = Math.abs(pitch.cents) <= 35;
-  ctx.save();
-  ctx.shadowColor = close ? 'rgba(116,247,255,.9)' : 'rgba(255,215,106,.5)';
-  ctx.shadowBlur  = 14;
-  ctx.fillStyle   = close ? '#85ffd0' : '#ffd76a';
-  ctx.strokeStyle = '#fff8ff'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(playheadX, y, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.shadowBlur  = 0;
-  const lx = playheadX + 22;
-  ctx.fillStyle = 'rgba(17,10,39,.86)';
-  roundRect(ctx, lx, y - 18, 86, 34, 17); ctx.fill();
-  ctx.strokeStyle = close ? 'rgba(133,255,208,.72)' : 'rgba(255,215,106,.65)'; ctx.stroke();
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#fff8ff';
-  ctx.font = `800 ${Math.round(W * 0.014)}px Inter, system-ui, sans-serif`;
-  ctx.fillText(pitch.note, lx + 10, y - 4);
-  ctx.fillStyle = close ? '#85ffd0' : '#ffd76a';
-  ctx.font = `700 ${Math.round(W * 0.011)}px Inter, system-ui, sans-serif`;
-  ctx.fillText(`${pitch.cents > 0 ? '+' : ''}${pitch.cents.toFixed(0)}¢`, lx + 10, y + 10);
   ctx.restore();
 }
 
@@ -698,8 +971,7 @@ function drawParticles(ctx) {
     const alpha = Math.min(1, p.life * 2);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur  = 10;
+    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
     ctx.fillStyle   = p.color;
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.size * Math.max(0.3, p.life), 0, Math.PI * 2);
@@ -716,60 +988,12 @@ function drawFloats(ctx, W) {
     ctx.globalAlpha = alpha;
     ctx.textAlign   = 'center';
     ctx.font        = `900 ${Math.round(W * 0.019)}px Inter, system-ui, sans-serif`;
-    ctx.shadowColor = 'rgba(255,215,106,.9)';
-    ctx.shadowBlur  = 16;
-    ctx.fillStyle   = '#ffd76a';
+    ctx.shadowColor = 'rgba(140,80,0,0.9)';
+    ctx.shadowBlur  = 14;
+    ctx.fillStyle   = '#c47a00';
     ctx.fillText(f.label, f.x, f.y);
     ctx.restore();
   }
-}
-
-// ── Playhead ──────────────────────────────────────────────────────────────────
-function drawPlayhead(ctx, x, H, t) {
-  ctx.save();
-  ctx.shadowColor = 'rgba(116,247,255,.9)'; ctx.shadowBlur = 20;
-  ctx.strokeStyle = '#a7f8ff'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(x, 12); ctx.lineTo(x, H - 12); ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#fff0a7'; ctx.strokeStyle = '#fff8ff'; ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(x - 2, 24, 12, Math.PI * 0.42, Math.PI * 1.62, false);
-  ctx.arc(x + 5, 24, 9,  Math.PI * 1.68, Math.PI * 0.35, true);
-  ctx.closePath(); ctx.fill(); ctx.stroke();
-  drawSparkle(ctx, x + 18, 42, 7);
-  ctx.restore();
-}
-
-// ── Sparkle / stars ───────────────────────────────────────────────────────────
-function drawSparkle(ctx, x, y, size) {
-  ctx.save(); ctx.translate(x, y);
-  ctx.fillStyle = '#fff0a7'; ctx.shadowColor = 'rgba(255,240,167,.8)'; ctx.shadowBlur = 8;
-  ctx.beginPath();
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const r = i % 2 === 0 ? size : size * 0.38;
-    i === 0 ? ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r)
-            : ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  ctx.closePath(); ctx.fill(); ctx.restore();
-}
-
-function drawStars(W, H) {
-  const stars = [[104,38,1.4],[184,246,1],[314,72,1.2],[472,282,1.1],[612,46,1.5],[744,238,1],[872,88,1.3],[924,292,1]];
-  ctx.fillStyle = 'rgba(255,240,167,.65)';
-  for (const [sx, sy, r] of stars) {
-    ctx.beginPath(); ctx.arc(sx % W, sy % H, r, 0, Math.PI * 2); ctx.fill();
-  }
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y,     x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x,     y + h, r);
-  ctx.arcTo(x,     y + h, x,     y,     r);
-  ctx.arcTo(x,     y,     x + w, y,     r);
-  ctx.closePath();
 }
 
 // ── Debug panel ───────────────────────────────────────────────────────────────
