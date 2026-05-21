@@ -532,18 +532,15 @@ function staffGeometry(W, H) {
 
   // Chromatic midi → diatonic steps above E4
   function midiToDiatonicSteps(midi) {
-    const C_DIATONIC = [0,0,1,1,2,3,3,4,4,5,5,6]; // C=0,D=1,E=2,F=3,G=4,A=5,B=6
-    const octave = Math.floor(midi / 12) - 1;
-    const pc     = midi % 12;
-    const eOctave = 4; // E4 is our zero
-    const ePc     = 4; // E = pc 4
-    // diatonic steps from E4
-    // steps within octave from E: E=0,F=1,G=2,A=3,B=4
-    // then next octave: C=5,D=6,E=7…
-    const STEPS_FROM_E = [5,5,6,6,0,1,1,2,2,3,3,4]; // pc 0(C)=5 steps above E same octave
-    const stepsInOctave = STEPS_FROM_E[pc];
-    const octaveDiff = octave - eOctave;
-    return octaveDiff * 7 + stepsInOctave;
+    // Maps chromatic MIDI note to diatonic steps above E4 (bottom staff line).
+    // C/C#/D/D# (pc < 4) cross the MIDI octave boundary but are diatonically
+    // still in the group starting from the E below them, so we shift the
+    // MIDI octave back by 1 before computing the offset.
+    const STEPS_FROM_E = [5,5,6,6, 0,1,1,2,2,3,3,4]; // pc: C=5,C#=5,D=6,D#=6, E=0,F=1,…,B=4
+    const pc         = midi % 12;
+    const midiOctave = Math.floor(midi / 12) - 1;
+    const eOctave    = pc < 4 ? midiOctave - 1 : midiOctave; // adjust for MIDI boundary
+    return (eOctave - 4) * 7 + STEPS_FROM_E[pc];
   }
 
   function noteY(midi) {
